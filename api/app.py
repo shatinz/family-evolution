@@ -1,6 +1,6 @@
 """
 FastAPI / Web Dashboard Backend for Scalable Family Evolution System
-Comprehensive REST APIs with full CRUD, agent-driven setup templates, and scheduler webhooks.
+Comprehensive REST APIs with full CRUD, longitudinal evaluations, informed consent, and scheduler webhooks.
 """
 import os
 import asyncio
@@ -27,6 +27,12 @@ from data.database import (
     get_all_members,
     get_member_by_id,
     unbind_telegram_id,
+    record_member_consent,
+    log_family_evaluation,
+    log_interpersonal_dynamics,
+    get_systemic_health_trend,
+    get_intervention_history,
+    record_intervention_adaptation,
     create_chore,
     update_chore,
     delete_chore,
@@ -53,7 +59,7 @@ from bot.scheduler import family_scheduler
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Family Evolution Hub", version="2.5.0")
+app = FastAPI(title="Family Evolution Hub", version="2.6.0")
 
 # Setup directories
 STATIC_DIR = BASE_DIR / "static"
@@ -72,6 +78,7 @@ class MemberCreateReq(BaseModel):
     role: str
     age: Optional[int] = None
     conditions: Optional[str] = None
+    medical_history: Optional[str] = None
     avatar: Optional[str] = "👤"
     is_leader: Optional[int] = 0
     is_co_leader: Optional[int] = 0
@@ -82,6 +89,7 @@ class MemberUpdateReq(BaseModel):
     role: str
     age: Optional[int] = None
     conditions: Optional[str] = None
+    medical_history: Optional[str] = None
     avatar: Optional[str] = "👤"
     is_leader: Optional[int] = 0
     is_co_leader: Optional[int] = 0
@@ -193,6 +201,7 @@ async def index_page(request: Request):
 async def get_system_status():
     members = get_all_members()
     linked_count = sum(1 for m in members if m["telegram_id"])
+    consented_count = sum(1 for m in members if m["consent_given"])
     return {
         "status": "online",
         "bot_configured": bool(config.telegram_bot_token),
@@ -203,6 +212,7 @@ async def get_system_status():
         "proxy": config.telegram_proxy if config.use_proxy else "Direct",
         "members_count": len(members),
         "linked_members_count": linked_count,
+        "consented_members_count": consented_count,
         "timestamp": datetime.now().isoformat()
     }
 
@@ -280,6 +290,9 @@ async def api_initialize_template(req: TemplateInitReq):
 async def api_reset_database():
     conn = get_db_connection()
     cursor = conn.cursor()
+    cursor.execute("DELETE FROM interpersonal_dynamics")
+    cursor.execute("DELETE FROM family_evaluations")
+    cursor.execute("DELETE FROM intervention_adaptations")
     cursor.execute("DELETE FROM habit_logs")
     cursor.execute("DELETE FROM habits")
     cursor.execute("DELETE FROM chore_schedule")
@@ -294,6 +307,16 @@ async def api_reset_database():
     conn.close()
     return {"status": "ok", "message": "Database cleared completely."}
 
+# --- Clinical Evaluations & Interventions ---
+@app.get("/api/evaluations/trends")
+async def api_get_evaluation_trends():
+    data = get_systemic_health_trend()
+    return data
+
+@app.get("/api/interventions/history")
+async def api_get_interventions():
+    return get_intervention_history()
+
 # --- Members CRUD ---
 @app.get("/api/members")
 async def api_get_members():
@@ -307,6 +330,7 @@ async def api_create_member(m: MemberCreateReq):
         role=m.role,
         age=m.age,
         conditions=m.conditions,
+        medical_history=m.medical_history,
         avatar=m.avatar or "👤",
         is_leader=m.is_leader or 0,
         is_co_leader=m.is_co_leader or 0
@@ -322,6 +346,7 @@ async def api_update_member(member_id: int, m: MemberUpdateReq):
         role=m.role,
         age=m.age,
         conditions=m.conditions,
+        medical_history=m.medical_history,
         avatar=m.avatar or "👤",
         is_leader=m.is_leader or 0,
         is_co_leader=m.is_co_leader or 0,
@@ -490,6 +515,11 @@ async def api_scheduler_evening():
     res = await telegram_bot.dispatch_evening_checkins()
     return {"status": "ok", "dispatched": res}
 
+@app.post("/api/scheduler/trigger-monthly-evaluations")
+async def api_scheduler_monthly():
+    res = await telegram_bot.dispatch_monthly_evaluations()
+    return {"status": "ok", "dispatched": res}
+
 @app.post("/api/scheduler/trigger-weekly-review")
 async def api_scheduler_weekly():
     leader_report, family_broadcast, stats = generate_weekly_analysis(days=7)
@@ -510,4 +540,9 @@ async def api_trigger_morning():
 @app.post("/api/telegram/trigger-evening")
 async def api_trigger_evening():
     res = await telegram_bot.dispatch_evening_checkins()
+    return res
+
+@app.post("/api/telegram/trigger-monthly-evaluations")
+async def api_trigger_monthly():
+    res = await telegram_bot.dispatch_monthly_evaluations()
     return res

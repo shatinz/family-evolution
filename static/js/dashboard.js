@@ -1,15 +1,17 @@
 /**
- * Family Evolution Dashboard - Client Side JavaScript v2.5
- * Dynamic Blueprint Rendering, Real CRUD, Clean Zero-Mock Setup, and Diagnostics.
+ * Family Evolution Dashboard - Client Side JavaScript v2.6
+ * Dynamic Blueprint Rendering, Longitudinal Evaluations, Informed Consent, and Intervention Tracking.
  */
 
 let moodChart = null;
+let evalTrendChart = null;
 let botUsername = "";
 
 document.addEventListener('DOMContentLoaded', () => {
     initTabs();
     loadDashboardData();
     loadBlueprint();
+    loadEvaluationsAndInterventions();
     loadSettings();
     setupEventListeners();
 });
@@ -33,7 +35,7 @@ function initTabs() {
                 if (targetId === 'tab-members') fetchMembersManage();
                 if (targetId === 'tab-chores') fetchChoresManage();
                 if (targetId === 'tab-habits') fetchHabits();
-                if (targetId === 'tab-reports') { fetchStats(); fetchReports(); }
+                if (targetId === 'tab-reports') { fetchStats(); fetchReports(); loadEvaluationsAndInterventions(); }
                 if (targetId === 'tab-settings') loadSettings();
             }
         });
@@ -97,7 +99,7 @@ async function fetchStatus() {
         if (badge && text) {
             if (data.bot_configured) {
                 badge.className = 'badge badge-green';
-                text.innerText = `@${botUsername} آنلاین`;
+                text.innerText = data.bot_username ? `@${data.bot_username} آنلاین` : 'ربات آنلاین';
             } else {
                 badge.className = 'badge badge-amber';
                 text.innerText = 'ربات بدون توکن';
@@ -202,6 +204,107 @@ async function loadBlueprint() {
     }
 }
 
+// --- Longitudinal Clinical Evaluations & Interventions ---
+async function loadEvaluationsAndInterventions() {
+    try {
+        const trendRes = await fetch('/api/evaluations/trends');
+        const trendData = await trendRes.json();
+
+        const trends = trendData.trends || [];
+        if (trends.length > 0) {
+            const latest = trends[trends.length - 1];
+            const safetyEl = document.getElementById('eval-stat-safety');
+            const respectEl = document.getElementById('eval-stat-respect');
+            const careEl = document.getElementById('eval-stat-care');
+            const climateEl = document.getElementById('eval-stat-climate');
+
+            if (safetyEl) safetyEl.innerText = `${latest.avg_safety ? latest.avg_safety.toFixed(1) : '-'} / ۵`;
+            if (respectEl) respectEl.innerText = `${latest.avg_respect ? latest.avg_respect.toFixed(1) : '-'} / ۵`;
+            if (careEl) careEl.innerText = `${latest.avg_care ? latest.avg_care.toFixed(1) : '-'} / ۵`;
+            if (climateEl) climateEl.innerText = `${latest.avg_climate ? latest.avg_climate.toFixed(1) : '-'} / ۵`;
+        }
+
+        renderEvalTrendChart(trends);
+
+        // Interventions History
+        const intRes = await fetch('/api/interventions/history');
+        const intHistory = await intRes.json();
+        const intCont = document.getElementById('interventions-history-container');
+        if (intCont) {
+            if (intHistory.length === 0) {
+                intCont.innerHTML = '<div style="color:var(--text-dim); font-size:0.85rem;">هنوز تغییر ساختاری ثبت نشده است. سیستم با بررسی ارزیابی‌های ماهانه به صورت خودکار مداخله‌ها را تطبیق می‌دهد.</div>';
+            } else {
+                intCont.innerHTML = intHistory.map(item => `
+                    <div style="background: rgba(0,0,0,0.25); padding: 12px 16px; border-radius: var(--radius-sm); border-right: 3px solid var(--accent-blue);">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                            <strong style="color:var(--accent-blue); font-size:0.95rem;">${item.trigger_reason}</strong>
+                            <span style="font-size:0.75rem; color:var(--text-dim);">${item.date}</span>
+                        </div>
+                        <p style="font-size:0.85rem; color:var(--text-main); margin-bottom:4px;">${item.rationale || ''}</p>
+                    </div>
+                `).join('');
+            }
+        }
+
+    } catch (e) {
+        console.error('Error loading evaluations:', e);
+    }
+}
+
+function renderEvalTrendChart(trends) {
+    const ctx = document.getElementById('evalTrendChart');
+    if (!ctx) return;
+
+    if (evalTrendChart) evalTrendChart.destroy();
+    if (!trends || trends.length === 0) return;
+
+    const labels = trends.map(t => t.date);
+    const safetyData = trends.map(t => t.avg_safety);
+    const respectData = trends.map(t => t.avg_respect);
+    const careData = trends.map(t => t.avg_care);
+
+    evalTrendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'امنیت روانی',
+                    data: safetyData,
+                    borderColor: '#38bdf8',
+                    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                    tension: 0.3
+                },
+                {
+                    label: 'احترام و جایگاه',
+                    data: respectData,
+                    borderColor: '#c084fc',
+                    backgroundColor: 'rgba(192, 132, 252, 0.1)',
+                    tension: 0.3
+                },
+                {
+                    label: 'حمایت و مراقبت ادراک‌شده',
+                    data: careData,
+                    borderColor: '#34d399',
+                    backgroundColor: 'rgba(52, 211, 153, 0.1)',
+                    tension: 0.3
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { min: 1, max: 5, grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#94a3b8' } },
+                x: { grid: { display: false }, ticks: { color: '#f8fafc', font: { family: 'Vazirmatn' } } }
+            },
+            plugins: {
+                legend: { labels: { color: '#f8fafc', font: { family: 'Vazirmatn' } } }
+            }
+        }
+    });
+}
+
 // --- Members: Overview & Full CRUD ---
 async function fetchMembersOverview() {
     const res = await fetch('/api/members');
@@ -227,7 +330,11 @@ async function fetchMembersOverview() {
     }
 
     container.innerHTML = members.map(m => {
-        const directLink = `https://t.me/${botUsername}?start=member_${m.id}`;
+        const directLink = botUsername ? `https://t.me/${botUsername}?start=member_${m.id}` : '#';
+        const consentBadge = m.consent_given 
+            ? '<span style="color:var(--accent-emerald); font-size:0.75rem;">رضایت: تایید شد ✅</span>' 
+            : '<span style="color:var(--accent-amber); font-size:0.75rem;">در انتظار تایید منشور ⏳</span>';
+
         return `
             <div class="glass-panel member-card">
                 <div class="member-card-header">
@@ -244,10 +351,10 @@ async function fetchMembersOverview() {
                     <span>
                         ${m.telegram_id 
                             ? '<span style="color:var(--accent-emerald)">تلگرام: متصل ✅</span>' 
-                            : `<a href="${directLink}" target="_blank" style="color:var(--accent-blue); text-decoration:none; font-weight:600;">🔗 اتصال به تلگرام</a>`
+                            : (botUsername ? `<a href="${directLink}" target="_blank" style="color:var(--accent-blue); text-decoration:none; font-weight:600;">🔗 اتصال به تلگرام</a>` : '<span>بدون اتصال</span>')
                         }
                     </span>
-                    <span>${m.is_leader ? '🌟 راهبر' : (m.is_co_leader ? '🤝 همیار' : 'عضو')}</span>
+                    <span>${consentBadge}</span>
                 </div>
             </div>
         `;
@@ -268,7 +375,7 @@ async function fetchMembersManage() {
     }
 
     container.innerHTML = members.map(m => {
-        const directLink = `https://t.me/${botUsername}?start=member_${m.id}`;
+        const directLink = botUsername ? `https://t.me/${botUsername}?start=member_${m.id}` : '#';
         return `
             <div class="glass-panel" style="display: flex; flex-direction: column; justify-content: space-between;">
                 <div>
@@ -285,17 +392,23 @@ async function fetchMembersManage() {
                             <button class="btn-glass" style="padding: 4px 8px; font-size: 0.75rem; color: var(--accent-rose);" onclick="deleteMember(${m.id})">🗑️</button>
                         </div>
                     </div>
-                    <div style="background: rgba(0,0,0,0.25); padding: 10px; border-radius: var(--radius-sm); font-size: 0.85rem; color: var(--text-muted); margin-bottom: 14px;">
-                        ${m.conditions || 'بدون توضیحات خاص.'}
+                    <div style="background: rgba(0,0,0,0.25); padding: 10px; border-radius: var(--radius-sm); font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">
+                        <strong>چالش‌ها:</strong> ${m.conditions || 'ثبت نشده'}
                     </div>
+                    ${m.medical_history ? `
+                        <div style="background: rgba(56,189,248,0.08); padding: 8px 10px; border-radius: var(--radius-sm); font-size: 0.8rem; color: var(--accent-blue); margin-bottom: 12px;">
+                            <strong>🩺 سابقه پزشکی:</strong> ${m.medical_history}
+                        </div>
+                    ` : ''}
                 </div>
                 <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px; font-size: 0.8rem; display: flex; justify-content: space-between; align-items: center;">
                     <div>
                         ${m.telegram_id 
-                            ? `<span style="color:var(--accent-emerald)">شناسه تلگرام: ${m.telegram_id}</span> <button class="btn-glass" style="padding:2px 6px; font-size:0.7rem;" onclick="unbindTelegram(${m.id})">قطع اتصال</button>` 
-                            : `<a href="${directLink}" target="_blank" class="btn-glass btn-primary" style="padding:4px 10px; font-size:0.75rem;">📱 لینک اختصاصی تلگرام</a>`
+                            ? `<span style="color:var(--accent-emerald)">تلگرام: ${m.telegram_id}</span> <button class="btn-glass" style="padding:2px 6px; font-size:0.7rem;" onclick="unbindTelegram(${m.id})">قطع</button>` 
+                            : (botUsername ? `<a href="${directLink}" target="_blank" class="btn-glass btn-primary" style="padding:4px 10px; font-size:0.75rem;">📱 لینک اتصال تلگرام</a>` : '<span>بدون ربات</span>')
                         }
                     </div>
+                    <span>${m.consent_given ? '✅ رضایت ثبت شد' : '⏳ بدون رضایت'}</span>
                 </div>
             </div>
         `;
@@ -343,6 +456,7 @@ function openEditMember(member) {
     document.getElementById('edit-member-age').value = member.age || '';
     document.getElementById('edit-member-avatar').value = member.avatar || '👤';
     document.getElementById('edit-member-conditions').value = member.conditions || '';
+    document.getElementById('edit-member-medical-history').value = member.medical_history || '';
     openModal('modal-edit-member');
 }
 
@@ -589,7 +703,7 @@ async function loadSettings() {
     if (setUseProxy) setUseProxy.value = cfg.use_proxy ? 'true' : 'false';
     if (setProvider) setProvider.value = cfg.llm_provider || 'openai_compatible';
     if (setUrl) setUrl.value = cfg.llm_base_url || 'http://localhost:20128/v1';
-    if (setModel) setModel.value = cfg.llm_model || 'telegram-agent';
+    if (setModel) setModel.value = cfg.llm_model || 'gemini-2.5-flash';
     if (setKey) setKey.value = cfg.llm_api_key || '';
     if (setGemini) setGemini.value = cfg.gemini_api_key || '';
 }
@@ -608,6 +722,7 @@ function setupEventListeners() {
                 age: parseInt(document.getElementById('member-age').value) || null,
                 avatar: document.getElementById('member-avatar').value || '👤',
                 conditions: document.getElementById('member-conditions').value,
+                medical_history: document.getElementById('member-medical-history').value,
                 is_leader: document.getElementById('member-is-leader').checked ? 1 : 0,
                 is_co_leader: document.getElementById('member-is-co-leader').checked ? 1 : 0
             };
@@ -635,7 +750,8 @@ function setupEventListeners() {
                 role: document.getElementById('edit-member-role').value,
                 age: parseInt(document.getElementById('edit-member-age').value) || null,
                 avatar: document.getElementById('edit-member-avatar').value || '👤',
-                conditions: document.getElementById('edit-member-conditions').value
+                conditions: document.getElementById('edit-member-conditions').value,
+                medical_history: document.getElementById('edit-member-medical-history').value
             };
             await fetch(`/api/members/${memberId}`, {
                 method: 'PUT',
@@ -749,6 +865,7 @@ function setupEventListeners() {
             showToast('پایگاه داده به طور کامل پاکسازی شد.', 'warning');
             loadDashboardData();
             loadBlueprint();
+            loadEvaluationsAndInterventions();
             fetchMembersManage();
             fetchChoresManage();
         });
@@ -831,6 +948,32 @@ function setupEventListeners() {
         });
     }
 
+    const monthlyTrigger = document.getElementById('btn-trigger-monthly');
+    if (monthlyTrigger) {
+        monthlyTrigger.addEventListener('click', async () => {
+            const res = await fetch('/api/scheduler/trigger-monthly-evaluations', { method: 'POST' });
+            const data = await res.json();
+            if (data.dispatched && data.dispatched.sent_count > 0) {
+                showToast(`ارزیابی ماهانه برای ${data.dispatched.sent_count} عضو ارسال شد.`, 'success');
+            } else {
+                showToast(`پیام ارسال نشد: هنوز عضوی به ربات تلگرام متصل نشده است.`, 'warning');
+            }
+        });
+    }
+
+    const monthlyEvalBtn = document.getElementById('btn-trigger-monthly-eval');
+    if (monthlyEvalBtn) {
+        monthlyEvalBtn.addEventListener('click', async () => {
+            const res = await fetch('/api/scheduler/trigger-monthly-evaluations', { method: 'POST' });
+            const data = await res.json();
+            if (data.dispatched && data.dispatched.sent_count > 0) {
+                showToast(`ارزیابی ماهانه برای ${data.dispatched.sent_count} عضو ارسال شد.`, 'success');
+            } else {
+                showToast(`پیام ارسال نشد: هنوز عضوی به ربات تلگرام متصل نشده است.`, 'warning');
+            }
+        });
+    }
+
     const broadcastBtn = document.getElementById('btn-send-broadcast');
     if (broadcastBtn) {
         broadcastBtn.addEventListener('click', async () => {
@@ -860,6 +1003,7 @@ function setupEventListeners() {
                 await fetch('/api/analysis/run', { method: 'POST' });
                 showToast('تحلیل روانشناختی انجام شد و در بخش گزارش‌ها ثبت گردید.', 'success');
                 loadDashboardData();
+                loadEvaluationsAndInterventions();
             } catch (e) {
                 showToast('خطا در تحلیل: ' + e, 'error');
             } finally {

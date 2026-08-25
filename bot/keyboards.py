@@ -1,8 +1,38 @@
 """
 Telegram Inline Keyboards for Family Evolution Bot
+Includes Consent Charters, Clinical Likert Rating Keyboards, and Task Actions.
 """
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from typing import List, Dict, Any
+
+def get_consent_keyboard(member_id: int) -> InlineKeyboardMarkup:
+    """Informed Consent & Privacy acceptance buttons"""
+    buttons = [
+        [
+            InlineKeyboardButton("✅ بله، با رضایت و آگاهی کامل شرکت می‌کنم", callback_data=f"consent:agree:{member_id}")
+        ],
+        [
+            InlineKeyboardButton("❌ خیر، مایل به همراهی نیستم", callback_data=f"consent:decline:{member_id}")
+        ]
+    ]
+    return InlineKeyboardMarkup(buttons)
+
+def get_likert_keyboard(metric: str) -> InlineKeyboardMarkup:
+    """1 to 5 Likert Scale for Psychological Evaluations"""
+    buttons = [
+        [
+            InlineKeyboardButton("۵ - بسیار زیاد / عالی 🌟", callback_data=f"eval:{metric}:5"),
+            InlineKeyboardButton("۴ - خوب و مطلوب ✨", callback_data=f"eval:{metric}:4")
+        ],
+        [
+            InlineKeyboardButton("۳ - متوسط و قابل قبول 😐", callback_data=f"eval:{metric}:3")
+        ],
+        [
+            InlineKeyboardButton("۲ - ضعیف / کم 😕", callback_data=f"eval:{metric}:2"),
+            InlineKeyboardButton("۱ - بسیار کم / ناامن 😔", callback_data=f"eval:{metric}:1")
+        ]
+    ]
+    return InlineKeyboardMarkup(buttons)
 
 def get_member_select_keyboard(members: List[Dict[str, Any]]) -> InlineKeyboardMarkup:
     """Keyboard to bind Telegram account to a family member"""
@@ -15,7 +45,6 @@ def get_member_select_keyboard(members: List[Dict[str, Any]]) -> InlineKeyboardM
 def get_mood_keyboard(member_role: str = "member") -> InlineKeyboardMarkup:
     """Liquid-touch simple mood buttons (1-5 mapped to emojis)"""
     if member_role == "father":
-        # Ultra simple 3-button keyboard for dementia
         buttons = [
             [
                 InlineKeyboardButton("😊 عالی و خوشحالم", callback_data="mood:5:father"),
@@ -24,7 +53,6 @@ def get_mood_keyboard(member_role: str = "member") -> InlineKeyboardMarkup:
             ]
         ]
     elif member_role == "mother":
-        # Includes anger/stress relief trigger
         buttons = [
             [
                 InlineKeyboardButton("😊 خوب و راضی‌ام (۵)", callback_data="mood:5:mother"),
@@ -61,24 +89,6 @@ def get_chore_actions_keyboard(schedule_id: int, current_status: str) -> InlineK
     ]
     return InlineKeyboardMarkup(buttons)
 
-def get_caregiver_report_keyboard() -> InlineKeyboardMarkup:
-    """Quick report on Father's condition from whoever is with him"""
-    buttons = [
-        [
-            InlineKeyboardButton("💊 داروها مصرف شد", callback_data="care:meds_done"),
-            InlineKeyboardButton("🐦 به پرنده غذا داد", callback_data="care:bird_done")
-        ],
-        [
-            InlineKeyboardButton("🌱 گل‌ها آبیاری شد", callback_data="care:plants_done"),
-            InlineKeyboardButton("🚶‍♂️ پیاده‌روی رفتند", callback_data="care:walk_done")
-        ],
-        [
-            InlineKeyboardButton("✨ حال عمومی عالی بود", callback_data="care:good_mood"),
-            InlineKeyboardButton("⚠️ نیاز به توجه و استراحت", callback_data="care:needs_rest")
-        ]
-    ]
-    return InlineKeyboardMarkup(buttons)
-
 def get_quick_menu_keyboard() -> InlineKeyboardMarkup:
     """Main action menu"""
     buttons = [
@@ -87,8 +97,8 @@ def get_quick_menu_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("🌱 عادت‌ها و سلامت", callback_data="menu:my_habits")
         ],
         [
-            InlineKeyboardButton("📅 تقویم کلی خانه", callback_data="menu:family_calendar"),
-            InlineKeyboardButton("📊 وضعیت هفتگی", callback_data="menu:status_report")
+            InlineKeyboardButton("📊 ارزیابی جامع خانواده", callback_data="menu:start_eval"),
+            InlineKeyboardButton("📅 تقویم کلی خانه", callback_data="menu:family_calendar")
         ]
     ]
     return InlineKeyboardMarkup(buttons)

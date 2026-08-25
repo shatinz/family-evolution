@@ -1,5 +1,5 @@
 -- Scalable Family Evolution System Database Schema
--- No hardcoded mock data. 100% clean and dynamic.
+-- Includes Informed Consent, Confidential Interpersonal Dynamics, and Monthly Longitudinal Evaluations.
 
 CREATE TABLE IF NOT EXISTS family_profile (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -29,11 +29,55 @@ CREATE TABLE IF NOT EXISTS members (
     role TEXT NOT NULL,
     age INTEGER,
     conditions TEXT,
+    medical_history TEXT,
     telegram_id INTEGER,
+    consent_given INTEGER DEFAULT 0,
+    consent_date TEXT,
     is_leader INTEGER DEFAULT 0,
     is_co_leader INTEGER DEFAULT 0,
     avatar TEXT DEFAULT '👤',
     status TEXT DEFAULT 'active',
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Monthly & Baseline Systemic Psychological Evaluations
+CREATE TABLE IF NOT EXISTS family_evaluations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    member_id INTEGER NOT NULL,
+    evaluation_type TEXT NOT NULL, -- 'baseline' or 'monthly'
+    date TEXT NOT NULL,
+    psychological_safety_score INTEGER, -- 1 to 5
+    respect_status_score INTEGER,       -- 1 to 5
+    perceived_care_score INTEGER,       -- 1 to 5
+    overall_family_climate_score INTEGER, -- 1 to 5
+    confidential_narrative_vector TEXT, -- Vector embedding / encrypted narrative
+    assessment_notes_json TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY(member_id) REFERENCES members(id) ON DELETE CASCADE
+);
+
+-- Confidential Interpersonal Dynamics (Pairwise Grievances & Appreciations)
+CREATE TABLE IF NOT EXISTS interpersonal_dynamics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_member_id INTEGER NOT NULL,
+    target_member_id INTEGER NOT NULL,
+    hurt_points_encrypted TEXT,        -- Kept strictly confidential for AI analysis only
+    appreciate_points_encrypted TEXT,   -- Kept strictly confidential for AI analysis only
+    relationship_valence INTEGER DEFAULT 3, -- 1 (very strained) to 5 (very warm)
+    date TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY(source_member_id) REFERENCES members(id) ON DELETE CASCADE,
+    FOREIGN KEY(target_member_id) REFERENCES members(id) ON DELETE CASCADE
+);
+
+-- Dynamic Intervention Tuning & Adaptations
+CREATE TABLE IF NOT EXISTS intervention_adaptations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    trigger_reason TEXT NOT NULL,
+    changes_made_json TEXT NOT NULL,
+    rationale TEXT,
+    measured_impact_json TEXT,
     created_at TEXT DEFAULT (datetime('now'))
 );
 

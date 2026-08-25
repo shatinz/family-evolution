@@ -1,15 +1,15 @@
 ---
 name: family-evolution
-description: "AI-Powered Family Behavioral & Cognitive Evolution Engine. Conducts an interactive setup drill, builds custom family scaffolding, chore calendars, dementia/elderly agency routines, and manages Telegram bot interactions."
+description: "AI-Powered Family Behavioral & Cognitive Evolution Engine. Conducts an interactive setup drill, builds custom family scaffolding, chore calendars, dementia/elderly agency routines, informed consent, longitudinal evaluations, and manages Telegram bot interactions."
 ---
 
 # Family Evolution Skill 🌿
 
-An autonomous AI engine designed to bring calm, structure, and psychological scaffolding to households.
+An autonomous AI engine designed to bring calm, structure, psychological safety, and behavioral scaffolding to households.
 
 ## Agent Workflow & Execution Protocol
 
-When a user loads or triggers this skill, the AI Agent MUST follow this 4-phase protocol:
+When a user loads or triggers this skill, the AI Agent MUST follow this 5-phase protocol:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -19,7 +19,9 @@ When a user loads or triggers this skill, the AI Agent MUST follow this 4-phase 
 ├─────────────────────────────────────────────────────────────┤
 │ 3. Template Synthesis & Database Initialization             │
 ├─────────────────────────────────────────────────────────────┤
-│ 4. Dashboard Launch & Member Telegram Onboarding            │
+│ 4. Member Onboarding, Informed Consent & Baseline Drill     │
+├─────────────────────────────────────────────────────────────┤
+│ 5. Monthly Longitudinal Re-assessments & Adaptive Tuning    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -29,11 +31,11 @@ When a user loads or triggers this skill, the AI Agent MUST follow this 4-phase 
 
 The AI Agent must proactively ask targeted, empathetic questions across these dimensions:
 
-1. **Family Roster & Roles**:
+1. **Family Roster, Medical & Cognitive Context**:
    - Who lives in the house? (Names, Persian names, ages, occupations, relationship).
-   - Are there specific cognitive or emotional conditions? (e.g., elderly dementia/Alzheimer's, caregiving fatigue, chronic anger, lack of motivation).
-2. **Household Chores & Bottlenecks**:
-   - What tasks are currently causing friction? (Dishes, floor cleaning, cooking, grocery runs, trash).
+   - Medical history, medications, or cognitive conditions (e.g., elderly dementia/Alzheimer's, chronic illness, sleep issues, caregiving fatigue, chronic anger).
+2. **Household Chores & Friction Points**:
+   - What tasks are currently causing friction? (Dishes, floor cleaning, cooking, grocery runs, trash, elderly care).
    - Who is currently bearing the heaviest burden?
 3. **Elderly & Meaningful Agency Scaffolds**:
    - What low-stress, live-feedback tasks can be given to elderly/isolated members? (e.g., bird care, watering plants, sorting photos, simple daily puzzles).
@@ -78,23 +80,23 @@ Once the user provides the family details, the AI Agent formats the complete arc
 {
   "template": {
     "family_profile": {
-      "family_name": "خانواده رضایی",
+      "family_name": "خانواده نمونه",
       "overview": "طرح تحول ساختاری جهت ارتقای بهزیستی، مهار دمانس و تقسیم عادلانه کارهای منزل."
     },
     "short_term_goals": [
       {
         "title": "استقرار تقویم عادلانه شستشوی ظروف و نظافت",
-        "description": "کاهش بار کاری مادر و چرخش نوبت میان فرزندان.",
+        "description": "کاهش بار کاری و چرخش نوبت میان فرزندان.",
         "target_date": "۲ هفته آینده",
         "steps": ["تعیین نوبت‌های روزانه", "ثبت تیک انجام کار در تلگرام"]
       }
     ],
     "long_term_goals": [
       {
-        "title": "حفظ استقلال شناختی پدر و آرامش پایدار خانه",
+        "title": "حفظ استقلال شناختی و آرامش پایدار خانه",
         "description": "مهار افت حافظه از طریق مسئولیت‌های زنده و پیاده‌روی روزانه.",
         "target_date": "۶ ماه آینده",
-        "steps": ["مراقبت روزانه از پرنده", "پیاده‌روی عصرگاهی با برادر", "جلسات هفتگی قدردانی"]
+        "steps": ["مراقبت روزانه از پرنده", "پیاده‌روی عصرگاهی", "جلسات هفتگی قدردانی"]
       }
     ],
     "members": [
@@ -104,6 +106,7 @@ Once the user provides the family details, the AI Agent formats the complete arc
         "role": "father",
         "age": 65,
         "conditions": "دمانس خفیف، نیاز به عاملیت و روتین زنده",
+        "medical_history": "سابقه فشار خون و افت حافظه کوتاه‌مدت",
         "avatar": "👴",
         "is_leader": 0
       },
@@ -113,15 +116,17 @@ Once the user provides the family details, the AI Agent formats the complete arc
         "role": "mother",
         "age": 60,
         "conditions": "خشم مزمن، نیاز به تنفس ۴-۷-۸ و کاهش بار",
+        "medical_history": "خستگی مراقبت و استرس مزمن",
         "avatar": "👵",
         "is_leader": 0
       },
       {
         "name": "Me",
-        "name_fa": "من (راهبر)",
+        "name_fa": "راهبر",
         "role": "user",
-        "age": 23,
-        "conditions": "دانشجوی روانشناسی و راهبر سیستم",
+        "age": 24,
+        "conditions": "راهبر سیستم",
+        "medical_history": "",
         "avatar": "🧠",
         "is_leader": 1
       }
@@ -132,11 +137,11 @@ Once the user provides the family details, the AI Agent formats the complete arc
         "title_en": "Washing dishes",
         "category": "kitchen",
         "frequency": "daily",
-        "assigned_to": "من (راهبر)",
+        "assigned_to": "راهبر",
         "icon": "🍽️"
       },
       {
-        "title_fa": "غذا دادن و رسیدگی به پرنده (بابا)",
+        "title_fa": "غذا دادن و رسیدگی به پرنده",
         "title_en": "Feeding bird",
         "category": "plants_pets",
         "frequency": "daily",
@@ -183,18 +188,47 @@ Once the user provides the family details, the AI Agent formats the complete arc
 
 ---
 
-## Phase 4: Scheduling & Agent Manager Webhooks
+## Phase 4: Informed Consent & Member Baseline Drill
 
-If the user prefers the **Agent Manager** to handle recurring schedules rather than the internal background task, the Agent Manager can trigger these standard webhooks:
+When each member joins via `https://t.me/<bot_username>?start=member_<id>`:
 
-- **09:00 Daily**: `POST http://127.0.0.1:5055/api/scheduler/trigger-morning` (Dispatches morning mood check-ins).
-- **20:00 Daily**: `POST http://127.0.0.1:5055/api/scheduler/trigger-evening` (Dispatches chore completion check).
-- **Saturday 21:00**: `POST http://127.0.0.1:5055/api/scheduler/trigger-weekly-review` (Executes AI psychological report and sends family summary).
+1. **Informed Consent & Privacy Charter (منشور رضایت آگاهانه)**:
+   - System clarifies purpose: Supportive AI behavioral & cognitive assistant.
+   - Voluntary participation: Free to participate or opt-out.
+   - **Confidentiality Guarantee**: Personal reflections, grievances, and interpersonal feelings are stored confidentially/vectorized. No human (including the system leader) can view raw personal confessions. Only the AI clinical engine processes them to formulate indirect, compassionate scaffolds.
+
+2. **Baseline Clinical & Interpersonal Drill**:
+   - **Medical Context**: Detailed medication, sleep, physical constraints.
+   - **Confidential Pairwise Dynamics**:
+     - *"در رابطه با X چه مسئله‌ای بیشتر از همه شما را آزرده است؟"*
+     - *"در رابطه با X چه ویژگی یا رفتاری را بیشتر از همه تحسین می‌کنید؟"*
+   - **Systemic Climate Likert Scales (1 to 5)**:
+     - 🛡️ **Psychological Safety**: *"چقدر در این خانه احساس امنیت روانی و پذیرفته شدن دارید؟"*
+     - 👑 **Respect & Status**: *"چقدر احساس می‌کنید نظرات و جایگاه شما در خانواده محترم است؟"*
+     - ❤️ **Perceived Care**: *"در سختی‌ها چقدر مطمئنید خانواده از شما مراقبت می‌کند؟"*
+     - 🏡 **Family Climate**: *"فضای کلی خانه را چطور ارزیابی می‌کنید؟"*
 
 ---
 
-## Direct Telegram Onboarding Link
+## Phase 5: Monthly Longitudinal Re-assessments & Adaptive Tuning
 
-For each member created in the database, guide the user to share the personalized link:
-`https://t.me/<bot_username>?start=member_<id>`
-Clicking this link binds their Telegram account in 1 tap without any typing needed.
+1. **Monthly Evaluation Trigger (Every 30 Days)**:
+   - Automated webhook: `POST http://127.0.0.1:5055/api/scheduler/trigger-monthly-evaluations`.
+   - Re-administers the 4 core Likert scale questions to measure psychological delta.
+
+2. **Closed-Loop Intervention Adaptation**:
+   - The AI analysis engine compares monthly evaluations against baseline:
+     - If **Perceived Care** drops: Auto-suggests chore burden reduction and targeted appreciation prompts.
+     - If **Psychological Safety** drops: Suggests stronger communication pauses and active listening scaffolds.
+     - If **Elderly Agency** drops: Refines cognitive habits and daily structured activities.
+   - All adjustments are logged into `intervention_adaptations` table for longitudinal audit.
+
+---
+
+## Scheduling & Agent Manager Webhooks
+
+If the **Agent Manager** handles recurring schedules:
+- **09:00 Daily**: `POST http://127.0.0.1:5055/api/scheduler/trigger-morning` (Dispatches morning mood check-ins).
+- **20:00 Daily**: `POST http://127.0.0.1:5055/api/scheduler/trigger-evening` (Dispatches chore completion check).
+- **1st of Month 10:00**: `POST http://127.0.0.1:5055/api/scheduler/trigger-monthly-evaluations` (Dispatches monthly evaluation drill).
+- **Saturday 21:00**: `POST http://127.0.0.1:5055/api/scheduler/trigger-weekly-review` (Generates weekly report & adapts interventions).

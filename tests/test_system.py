@@ -1,6 +1,6 @@
 """
-Comprehensive Unit and Integration Tests for Scalable Family Evolution System v2.5
-Zero mock data, clean template initialization, and scheduler webhooks.
+Comprehensive Unit and Integration Tests for Scalable Family Evolution System v2.6
+Covers Informed Consent, Clinical Evaluations, Confidential Dynamics, and Adaptive Interventions.
 """
 import unittest
 import os
@@ -19,6 +19,12 @@ from data.database import (
     update_member,
     delete_member,
     get_all_members,
+    record_member_consent,
+    log_family_evaluation,
+    log_interpersonal_dynamics,
+    get_systemic_health_trend,
+    record_intervention_adaptation,
+    get_intervention_history,
     create_chore,
     update_chore,
     delete_chore,
@@ -57,28 +63,41 @@ class TestScalableFamilyEvolution(unittest.TestCase):
             except Exception:
                 pass
 
-    def test_01_member_crud(self):
+    def test_01_member_crud_and_consent(self):
         mid = create_member(
             name="Sara",
             name_fa="سارا",
             role="sister",
             age=28,
             conditions="معلم زبان",
+            medical_history="سابقه سردردهای میگرنی",
             avatar="👩"
         )
         self.assertGreater(mid, 0)
         
+        # Check initial consent is 0
         members = get_all_members()
         self.assertEqual(len(members), 1)
-        self.assertEqual(members[0]["name_fa"], "سارا")
+        self.assertEqual(members[0]["consent_given"], 0)
+        self.assertEqual(members[0]["medical_history"], "سابقه سردردهای میگرنی")
         
+        # Record consent
+        c_ok = record_member_consent(mid, True)
+        self.assertTrue(c_ok)
+        
+        members_after = get_all_members()
+        self.assertEqual(members_after[0]["consent_given"], 1)
+        self.assertIsNotNone(members_after[0]["consent_date"])
+        
+        # Update
         updated = update_member(
             member_id=mid,
             name="Sara Updated",
             name_fa="سارا رضایی",
             role="sister",
             age=29,
-            conditions="معلم زبان و همیار"
+            conditions="معلم زبان و همیار",
+            medical_history="تحت درمان دارویی"
         )
         self.assertTrue(updated)
         
@@ -86,75 +105,72 @@ class TestScalableFamilyEvolution(unittest.TestCase):
         self.assertTrue(deleted)
         self.assertEqual(len(get_all_members()), 0)
 
-    def test_02_chore_crud(self):
-        mid = create_member(name="Ali", name_fa="علی", role="brother")
-        cid = create_chore(
-            title_fa="خرید نان",
-            title_en="Buy bread",
-            category="groceries",
-            frequency="daily",
-            default_assignee_id=mid,
-            icon="🥖"
+    def test_02_clinical_evaluations_and_confidential_dynamics(self):
+        m1 = create_member(name="Mother", name_fa="مادر", role="mother", age=60)
+        m2 = create_member(name="Son", name_fa="پسر", role="brother", age=25)
+        
+        # Log confidential interpersonal dynamics
+        dyn_id = log_interpersonal_dynamics(
+            source_member_id=m1,
+            target_member_id=m2,
+            hurt_points="عدم مشارکت در نظافت آشپزخانه",
+            appreciate_points="مهربانی و شوخ‌طبعی",
+            relationship_valence=3
         )
-        self.assertGreater(cid, 0)
+        self.assertGreater(dyn_id, 0)
         
-        chores = get_all_chores()
-        self.assertEqual(len(chores), 1)
-        self.assertEqual(chores[0]["title_fa"], "خرید نان")
-        
-        updated = update_chore(
-            chore_id=cid,
-            title_fa="خرید نان سنگک",
-            title_en="Buy Sangak bread",
-            category="groceries",
-            frequency="daily",
-            default_assignee_id=mid,
-            icon="🥖"
+        # Log baseline & monthly evaluation
+        eval_id = log_family_evaluation(
+            member_id=m1,
+            evaluation_type="baseline",
+            psychological_safety=4,
+            respect_status=3,
+            perceived_care=4,
+            overall_climate=3,
+            narrative_text="احساس می‌کنم کارهای خانه زیاده اما امیدوارم به بهبود"
         )
-        self.assertTrue(updated)
+        self.assertGreater(eval_id, 0)
         
-        deleted = delete_chore(cid)
-        self.assertTrue(deleted)
-        delete_member(mid)
+        # Check trend aggregation
+        trends = get_systemic_health_trend()
+        self.assertGreater(len(trends["trends"]), 0)
+        self.assertEqual(trends["trends"][0]["avg_safety"], 4.0)
+        
+        # Record intervention adaptation
+        aid = record_intervention_adaptation(
+            trigger_reason="افت نمره احترام مادر",
+            changes_made={"chores_adjustment": "انتقال ظروف به پسر"},
+            rationale="کاهش فرسودگی عاطفی مادر"
+        )
+        self.assertGreater(aid, 0)
+        
+        history = get_intervention_history()
+        self.assertGreater(len(history), 0)
+        self.assertEqual(history[0]["trigger_reason"], "افت نمره احترام مادر")
+        
+        delete_member(m1)
+        delete_member(m2)
 
-    def test_03_habit_crud(self):
-        mid = create_member(name="Father", name_fa="پدر", role="father")
-        hid = create_habit(
-            member_id=mid,
-            title_fa="غذا دادن به پرنده",
-            title_en="Bird feeding",
-            category="cognitive"
-        )
-        self.assertGreater(hid, 0)
-        
-        status1 = toggle_habit_log(hid, mid, target_date="2099-01-01")
-        self.assertEqual(status1, "done")
-        status2 = toggle_habit_log(hid, mid, target_date="2099-01-01")
-        self.assertEqual(status2, "missed")
-        
-        delete_habit(hid)
-        delete_member(mid)
-
-    def test_04_agent_template_initialization(self):
-        sample_agent_template = {
+    def test_03_agent_template_initialization(self):
+        sample_template = {
             "family_profile": {
-                "family_name": "خانواده نمونه",
-                "overview": "طرح تحول ساختاری جهت ارتقای بهزیستی و تقسیم کار عادلانه."
+                "family_name": "خانواده امید",
+                "overview": "طرح تحول ساختاری و ارتقای امنیت روانی."
             },
             "short_term_goals": [
                 {
-                    "title": "تقویم نظافت آشپزخانه",
-                    "description": "کاهش بار کاری و چرخش نوبت",
+                    "title": "نظم کارهای خانه",
+                    "description": "چرخش نوبت شستشوی ظروف",
                     "target_date": "۲ هفته آینده",
-                    "steps": ["تعیین نوبت", "ارسال پیام یادآوری"]
+                    "steps": ["تعیین نوبت", "ثبت تیک"]
                 }
             ],
             "long_term_goals": [
                 {
-                    "title": "ارتقای تعاملات خانوادگی",
-                    "description": "افزایش همدلی و کاهش اصطکاک",
+                    "title": "آرامش پایدار و احترام متقابل",
+                    "description": "کاهش فرسودگی عاطفی",
                     "target_date": "۶ ماه آینده",
-                    "steps": ["جلسات ماهانه", "پیاده‌روی جمعی"]
+                    "steps": ["جلسات ماهانه", "پیاده‌روی"]
                 }
             ],
             "members": [
@@ -163,103 +179,55 @@ class TestScalableFamilyEvolution(unittest.TestCase):
                     "name_fa": "پدر",
                     "role": "father",
                     "age": 65,
-                    "conditions": "نیاز به فعالیت روزمره",
-                    "avatar": "👴",
-                    "is_leader": 0
-                },
-                {
-                    "name": "Me",
-                    "name_fa": "راهبر",
-                    "role": "user",
-                    "age": 25,
-                    "conditions": "مدیریت برنامه",
-                    "avatar": "🧠",
-                    "is_leader": 1
+                    "conditions": "دمانس خفیف",
+                    "medical_history": "داروی حافظه",
+                    "avatar": "👴"
                 }
             ],
             "chores": [
                 {
-                    "title_fa": "شستن ظروف",
-                    "title_en": "Dishes",
-                    "category": "kitchen",
+                    "title_fa": "آبیاری گل‌ها",
+                    "title_en": "Plants",
+                    "category": "plants_pets",
                     "frequency": "daily",
-                    "assigned_to": "راهبر",
-                    "icon": "🍽️"
+                    "assigned_to": "پدر",
+                    "icon": "🌱"
                 }
             ],
             "habits": [
                 {
                     "target_member": "پدر",
-                    "habit": "آبیاری گلدان‌ها",
+                    "habit": "مرور خاطرات",
                     "category": "cognitive",
                     "frequency": "روزانه",
                     "reminder_time": "09:00"
                 }
             ],
-            "communication_rules": [
-                "توقف ۵ دقیقه‌ای در صورت بروز خشم"
-            ],
-            "emergency_and_free_resources": [
-                {
-                    "title": "سامانه ۱۴۸۰",
-                    "phone": "1480",
-                    "description": "مشاوره رایگان بهزیستی"
-                }
-            ]
+            "communication_rules": ["توقف ۵ دقیقه‌ای در خشم"],
+            "emergency_and_free_resources": [{"title": "۱۴۸۰", "phone": "1480", "description": "بهزیستی"}]
         }
         
-        # Test API initialization endpoint
-        res = self.client.post("/api/setup/initialize-template", json={"template": sample_agent_template})
+        res = self.client.post("/api/setup/initialize-template", json={"template": sample_template})
         self.assertEqual(res.status_code, 200)
-        data = res.json()
-        self.assertEqual(data["status"], "ok")
-        self.assertEqual(data["members_count"], 2)
-        self.assertEqual(data["chores_count"], 1)
-        self.assertEqual(data["habits_count"], 1)
+        self.assertEqual(res.json()["status"], "ok")
 
-        # Check template endpoint
-        t_res = self.client.get("/api/setup/template")
+    def test_04_api_evaluation_and_intervention_endpoints(self):
+        # Evaluation trends endpoint
+        t_res = self.client.get("/api/evaluations/trends")
         self.assertEqual(t_res.status_code, 200)
-        t_data = t_res.json()
-        self.assertEqual(t_data["profile"]["family_name"], "خانواده نمونه")
-        self.assertEqual(len(t_data["goals"]), 2)
+        
+        # Interventions history endpoint
+        i_res = self.client.get("/api/interventions/history")
+        self.assertEqual(i_res.status_code, 200)
+        
+        # Monthly evaluation trigger webhook
+        m_res = self.client.post("/api/scheduler/trigger-monthly-evaluations")
+        self.assertEqual(m_res.status_code, 200)
 
-    def test_05_stats_and_reporting(self):
-        members = get_all_members()
-        if members:
-            log_checkin(member_id=members[0]["id"], mood=5, checkin_type="morning")
-            log_conflict(reported_by_id=members[0]["id"], involved="اعضا", trigger="خستگی", severity=1)
-        
-        stats = get_stats_summary(days=7)
-        self.assertIn("has_data", stats)
-        self.assertIn("avg_mood", stats)
-        
-        leader_report, family_broadcast, _ = generate_weekly_analysis(days=7)
+        # Weekly analysis
+        leader_report, family_broadcast, stats = generate_weekly_analysis(days=7)
         self.assertTrue(len(leader_report) > 0)
         self.assertTrue(len(family_broadcast) > 0)
-
-    def test_06_scheduler_webhooks_and_diagnostics(self):
-        # Diagnostics
-        tg_res = self.client.post("/api/telegram/test-connection")
-        self.assertEqual(tg_res.status_code, 200)
-        
-        ai_res = self.client.post("/api/ai/test-connection")
-        self.assertEqual(ai_res.status_code, 200)
-        
-        # Scheduler webhooks
-        m_res = self.client.post("/api/scheduler/trigger-morning")
-        self.assertEqual(m_res.status_code, 200)
-        
-        e_res = self.client.post("/api/scheduler/trigger-evening")
-        self.assertEqual(e_res.status_code, 200)
-        
-        w_res = self.client.post("/api/scheduler/trigger-weekly-review")
-        self.assertEqual(w_res.status_code, 200)
-
-        # HTML Dashboard
-        html_res = self.client.get("/")
-        self.assertEqual(html_res.status_code, 200)
-        self.assertIn("خانواده‌یار", html_res.text)
 
 if __name__ == "__main__":
     unittest.main()

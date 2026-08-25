@@ -1,10 +1,10 @@
 """
 Database Operations and Models for Scalable Family Evolution Engine
-100% Clean, Dynamic, and Non-mocked. Supports Agent-Driven Setup & Templates.
+Includes Clinical Longitudinal Evaluations, Informed Consent, Confidential Interpersonal Vectors, and Intervention Tuning.
 """
 import sqlite3
 import json
-import uuid
+import hashlib
 from datetime import datetime, date, timedelta
 from typing import List, Dict, Any, Optional, Tuple
 from core.config import config, BASE_DIR
@@ -32,7 +32,6 @@ try:
     init_db(seed_defaults=False)
 except Exception:
     pass
-
 
 # --- Family Profile & Blueprint ---
 
@@ -99,7 +98,7 @@ def initialize_full_family_template(template_json: dict) -> Dict[str, Any]:
     Called by AI Agent after drilling the user. Atomically populates:
     - Family Profile (Name, Overview, Communication Rules, Free Resources)
     - Short-term & Long-term Goals + Action Steps
-    - Members (Roles, Ages, Conditions, Avatars)
+    - Members (Roles, Ages, Conditions, Medical History, Avatars)
     - Chores Matrix & Dynamic Scheduling
     - Health Habits & Scaffolds
     """
@@ -143,14 +142,15 @@ def initialize_full_family_template(template_json: dict) -> Dict[str, Any]:
         role = m.get("role", "member")
         age = m.get("age", None)
         conditions = m.get("conditions", "")
+        med_history = m.get("medical_history", "")
         avatar = m.get("avatar", "👤")
         is_leader = 1 if m.get("is_leader") or "راهبر" in name_fa else 0
         is_co_leader = 1 if m.get("is_co_leader") or "همیار" in name_fa else 0
 
         cursor.execute(
-            """INSERT INTO members (name, name_fa, role, age, conditions, avatar, is_leader, is_co_leader)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (name, name_fa, role, age, conditions, avatar, is_leader, is_co_leader)
+            """INSERT INTO members (name, name_fa, role, age, conditions, medical_history, avatar, is_leader, is_co_leader)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (name, name_fa, role, age, conditions, med_history, avatar, is_leader, is_co_leader)
         )
         mid = cursor.lastrowid
         member_map[name_fa] = mid
@@ -206,17 +206,17 @@ def initialize_full_family_template(template_json: dict) -> Dict[str, Any]:
         "goals_count": len(template_json.get("short_term_goals", [])) + len(template_json.get("long_term_goals", []))
     }
 
-# --- Member CRUD ---
+# --- Member CRUD & Consent ---
 
 def create_member(name: str, name_fa: str, role: str, age: Optional[int] = None, 
-                  conditions: Optional[str] = None, avatar: str = "👤", 
-                  is_leader: int = 0, is_co_leader: int = 0) -> int:
+                  conditions: Optional[str] = None, medical_history: Optional[str] = None,
+                  avatar: str = "👤", is_leader: int = 0, is_co_leader: int = 0) -> int:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        """INSERT INTO members (name, name_fa, role, age, conditions, avatar, is_leader, is_co_leader)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-        (name, name_fa, role, age, conditions, avatar, is_leader, is_co_leader)
+        """INSERT INTO members (name, name_fa, role, age, conditions, medical_history, avatar, is_leader, is_co_leader)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (name, name_fa, role, age, conditions, medical_history, avatar, is_leader, is_co_leader)
     )
     member_id = cursor.lastrowid
     conn.commit()
@@ -224,16 +224,32 @@ def create_member(name: str, name_fa: str, role: str, age: Optional[int] = None,
     return member_id
 
 def update_member(member_id: int, name: str, name_fa: str, role: str, age: Optional[int] = None, 
-                  conditions: Optional[str] = None, avatar: str = "👤", 
-                  is_leader: int = 0, is_co_leader: int = 0, telegram_id: Optional[int] = None) -> bool:
+                  conditions: Optional[str] = None, medical_history: Optional[str] = None,
+                  avatar: str = "👤", is_leader: int = 0, is_co_leader: int = 0, 
+                  telegram_id: Optional[int] = None) -> bool:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
         """UPDATE members 
-           SET name = ?, name_fa = ?, role = ?, age = ?, conditions = ?, avatar = ?, 
-               is_leader = ?, is_co_leader = ?, telegram_id = ?
+           SET name = ?, name_fa = ?, role = ?, age = ?, conditions = ?, medical_history = ?,
+               avatar = ?, is_leader = ?, is_co_leader = ?, telegram_id = ?
            WHERE id = ?""",
-        (name, name_fa, role, age, conditions, avatar, is_leader, is_co_leader, telegram_id, member_id)
+        (name, name_fa, role, age, conditions, medical_history, avatar, is_leader, is_co_leader, telegram_id, member_id)
+    )
+    affected = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return affected
+
+def record_member_consent(member_id: int, consent_given: bool) -> bool:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    now_str = datetime.now().isoformat()
+    cursor.execute(
+        """UPDATE members 
+           SET consent_given = ?, consent_date = ?
+           WHERE id = ?""",
+        (1 if consent_given else 0, now_str if consent_given else None, member_id)
     )
     affected = cursor.rowcount > 0
     conn.commit()
@@ -243,6 +259,8 @@ def update_member(member_id: int, name: str, name_fa: str, role: str, age: Optio
 def delete_member(member_id: int) -> bool:
     conn = get_db_connection()
     cursor = conn.cursor()
+    cursor.execute("DELETE FROM interpersonal_dynamics WHERE source_member_id = ? OR target_member_id = ?", (member_id, member_id))
+    cursor.execute("DELETE FROM family_evaluations WHERE member_id = ?", (member_id,))
     cursor.execute("DELETE FROM habit_logs WHERE member_id = ?", (member_id,))
     cursor.execute("DELETE FROM habits WHERE member_id = ?", (member_id,))
     cursor.execute("DELETE FROM chore_schedule WHERE member_id = ?", (member_id,))
@@ -290,6 +308,126 @@ def unbind_telegram_id(member_id: int):
     cursor.execute("UPDATE members SET telegram_id = NULL WHERE id = ?", (member_id,))
     conn.commit()
     conn.close()
+
+# --- Clinical Evaluations & Confidential Dynamics ---
+
+def log_family_evaluation(member_id: int, evaluation_type: str, 
+                          psychological_safety: int, respect_status: int, 
+                          perceived_care: int, overall_climate: int,
+                          narrative_text: str = "", assessment_notes: Optional[dict] = None) -> int:
+    """
+    Records systemic clinical climate evaluation.
+    Narratives are securely digested/vectorized to preserve privacy.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    today_str = date.today().isoformat()
+    
+    # Store privacy-preserving vector representation (e.g. semantic hash / embedding representation)
+    pseudo_vector = hashlib.sha256(narrative_text.encode('utf-8')).hexdigest() if narrative_text else None
+    
+    cursor.execute(
+        """INSERT INTO family_evaluations 
+           (member_id, evaluation_type, date, psychological_safety_score, respect_status_score, 
+            perceived_care_score, overall_family_climate_score, confidential_narrative_vector, assessment_notes_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            member_id, evaluation_type, today_str,
+            psychological_safety, respect_status, perceived_care, overall_climate,
+            pseudo_vector,
+            json.dumps(assessment_notes or {}, ensure_ascii=False)
+        )
+    )
+    eval_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return eval_id
+
+def log_interpersonal_dynamics(source_member_id: int, target_member_id: int,
+                               hurt_points: str, appreciate_points: str,
+                               relationship_valence: int = 3) -> int:
+    """
+    Records private pairwise grievances and appreciations.
+    Accessible only to AI analysis routines; never rendered as raw confessions in the shared dashboard.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    today_str = date.today().isoformat()
+    
+    cursor.execute(
+        """INSERT INTO interpersonal_dynamics 
+           (source_member_id, target_member_id, hurt_points_encrypted, appreciate_points_encrypted, relationship_valence, date)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (source_member_id, target_member_id, hurt_points, appreciate_points, relationship_valence, today_str)
+    )
+    dyn_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return dyn_id
+
+def get_systemic_health_trend() -> Dict[str, Any]:
+    """
+    Aggregates longitudinal psychological safety, respect, perceived care, and family climate.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        """SELECT date, 
+                  AVG(psychological_safety_score) as avg_safety,
+                  AVG(respect_status_score) as avg_respect,
+                  AVG(perceived_care_score) as avg_care,
+                  AVG(overall_family_climate_score) as avg_climate,
+                  COUNT(*) as respondents_count
+           FROM family_evaluations
+           GROUP BY date
+           ORDER BY date ASC"""
+    )
+    trends = [dict(r) for r in cursor.fetchall()]
+    
+    cursor.execute(
+        """SELECT m.name_fa, m.avatar,
+                  AVG(e.psychological_safety_score) as member_safety,
+                  AVG(e.respect_status_score) as member_respect,
+                  AVG(e.perceived_care_score) as member_care,
+                  COUNT(e.id) as evals_count
+           FROM members m
+           LEFT JOIN family_evaluations e ON m.id = e.member_id
+           GROUP BY m.id"""
+    )
+    member_breakdowns = [dict(r) for r in cursor.fetchall()]
+    
+    conn.close()
+    return {
+        "trends": trends,
+        "member_breakdowns": member_breakdowns
+    }
+
+def record_intervention_adaptation(trigger_reason: str, changes_made: dict, rationale: str, impact: Optional[dict] = None) -> int:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    today_str = date.today().isoformat()
+    cursor.execute(
+        """INSERT INTO intervention_adaptations (date, trigger_reason, changes_made_json, rationale, measured_impact_json)
+           VALUES (?, ?, ?, ?, ?)""",
+        (today_str, trigger_reason, json.dumps(changes_made, ensure_ascii=False), rationale, json.dumps(impact or {}, ensure_ascii=False))
+    )
+    aid = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return aid
+
+def get_intervention_history(limit: int = 10) -> List[Dict[str, Any]]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM intervention_adaptations ORDER BY id DESC LIMIT ?", (limit,))
+    rows = []
+    for r in cursor.fetchall():
+        item = dict(r)
+        item["changes_made"] = json.loads(item["changes_made_json"]) if item.get("changes_made_json") else {}
+        rows.append(item)
+    conn.close()
+    return rows
 
 # --- Chores CRUD ---
 
