@@ -1,0 +1,17 @@
+{
+  "telegram_bot_token": "",
+  "telegram_proxy": "socks5h://127.0.0.1:10808",
+  "use_proxy": false,
+  "llm_provider": "gemini_native",
+  "llm_base_url": "http://localhost:20128/v1",
+  "llm_model": "gemini-2.5-flash",
+  "llm_api_key": "",
+  "gemini_api_key": "",
+  "web_host": "127.0.0.1",
+  "web_port": 5055,
+  "language": "fa",
+  "morning_checkin_time": "09:00",
+  "evening_checkin_time": "20:00",
+  "weekly_meeting_day": "Sunday",
+  "weekly_meeting_time": "19:30"
+}

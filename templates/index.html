@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Family Evolution Hub • خانواده‌یار</title>
+    <!-- Fonts & Chart.js -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/static/css/liquidglass.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Top Navigation -->
+        <header class="navbar">
+            <div class="brand">
+                <span class="brand-icon">🌱</span>
+                <span>خانواده‌یار <span style="font-size:0.75rem; font-weight:400; color:var(--text-muted);">Family Evolution</span></span>
+            </div>
+
+            <nav class="nav-tabs">
+                <button class="nav-tab active" data-target="tab-overview">🏠 نمای کلی</button>
+                <button class="nav-tab" data-target="tab-blueprint">🎯 اهداف و نقشه راه</button>
+                <button class="nav-tab" data-target="tab-members">👥 اعضای خانواده</button>
+                <button class="nav-tab" data-target="tab-chores">📅 تقویم و وظایف</button>
+                <button class="nav-tab" data-target="tab-habits">🌿 سلامت و عادت‌ها</button>
+                <button class="nav-tab" data-target="tab-reports">📊 گزارش‌ها</button>
+                <button class="nav-tab" data-target="tab-settings">⚙️ تنظیمات</button>
+            </nav>
+
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div class="badge badge-green" id="bot-status-badge" style="gap: 8px;">
+                    <div class="pulse-dot"></div>
+                    <span id="bot-status-text">ربات آنلاین</span>
+                </div>
+                <button class="btn-glass" onclick="openModal('modal-broadcast')">📢 پیام همگانی</button>
+            </div>
+        </header>
+
+        <!-- Status Toast Banner -->
+        <div id="toast-banner" style="display: none; margin-bottom: 20px; padding: 12px 20px; border-radius: var(--radius-md); backdrop-filter: blur(12px);"></div>
+
+        <!-- ==================== TAB 1: OVERVIEW ==================== -->
+        <section id="tab-overview" class="tab-section">
+            <div class="hero-header">
+                <div>
+                    <h1 class="hero-title" id="family-display-title">سامانه تحول و آرامش خانواده</h1>
+                    <p class="hero-subtitle" id="family-display-overview">هدایت هوشمند وظایف، توانبخشی شناختی سالمند، مهار تنش و ارتقای بهزیستی خانه</p>
+                </div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="btn-glass btn-primary" id="btn-run-analysis">🧠 اجرای فوری تحلیل هوش مصنوعی</button>
+                    <button class="btn-glass btn-emerald" onclick="openModal('modal-add-member')">➕ عضو جدید</button>
+                    <button class="btn-glass" onclick="openModal('modal-add-chore')">➕ کار جدید</button>
+                </div>
+            </div>
+
+            <!-- Members Live Grid -->
+            <div class="members-grid" id="members-overview-container">
+                <!-- Dynamically Populated by JS -->
+            </div>
+
+            <div class="dashboard-grid">
+                <!-- Left: Today's Chores Schedule -->
+                <div class="glass-panel min-w-0">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
+                        <h3 style="font-size: 1.15rem; font-weight: 700;">📋 کارهای امروز خانه</h3>
+                        <span class="badge badge-blue">بروزرسانی زنده</span>
+                    </div>
+                    <div class="chores-list" id="today-chores-list">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Right: Quick Trigger & Real Metrics -->
+                <div style="display: flex; flex-direction: column; gap: 20px;" class="min-w-0">
+                    <!-- Quick Triggers Panel -->
+                    <div class="glass-panel">
+                        <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 14px;">⚡ عملیات فوری تلگرام</h3>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <button class="btn-glass" id="btn-trigger-morning">☀️ ارسال احوالپرسی صبحگاهی</button>
+                            <button class="btn-glass" id="btn-trigger-evening">🌙 ارسال بررسی وظایف عصرگاهی</button>
+                            <button class="btn-glass" onclick="openModal('modal-log-conflict')">🕊️ ثبت رویداد تنش / تعارض</button>
+                        </div>
+                    </div>
+
+                    <!-- Live Stat Card -->
+                    <div class="glass-panel" style="background: linear-gradient(135deg, rgba(56,189,248,0.08), rgba(168,85,247,0.08));">
+                        <h3 style="font-size: 1.05rem; font-weight: 700; margin-bottom: 12px;">📊 شاخص‌های واقعی هفته</h3>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div style="background: rgba(0,0,0,0.25); padding: 12px; border-radius: var(--radius-sm);">
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">میانگین خلق‌وخو</div>
+                                <div style="font-size: 1.4rem; font-weight: 800; color: var(--accent-blue);" id="stat-avg-mood">-</div>
+                            </div>
+                            <div style="background: rgba(0,0,0,0.25); padding: 12px; border-radius: var(--radius-sm);">
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">انجام وظایف</div>
+                                <div style="font-size: 1.4rem; font-weight: 800; color: var(--accent-emerald);" id="stat-chore-rate">-</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 10px; font-size: 0.8rem; color: var(--text-dim);">
+                            تنش‌های ثبت‌شده: <strong style="color: var(--text-main);" id="stat-conflicts">۰ مورد</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== TAB 2: BLUEPRINT & GOALS ==================== -->
+        <section id="tab-blueprint" class="tab-section" style="display: none;">
+            <div class="glass-panel" style="margin-bottom: 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <div>
+                        <h2 style="font-size: 1.3rem; font-weight: 700;" id="bp-family-name">🎯 اهداف کوتاه‌مدت و بلندمدت خانواده</h2>
+                        <p style="font-size: 0.85rem; color: var(--text-muted);">برنامه ساختاری و گام‌های عملیاتی تنظیم‌شده توسط عامل هوشمند</p>
+                    </div>
+                </div>
+
+                <!-- Short Term Goals -->
+                <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--accent-emerald); margin-bottom: 12px;">🌱 اهداف کوتاه‌مدت (۱ تا ۴ هفته)</h3>
+                <div id="short-term-goals-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; margin-bottom: 24px;">
+                    <!-- Loaded via JS -->
+                </div>
+
+                <!-- Long Term Goals -->
+                <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--accent-purple); margin-bottom: 12px;">🌟 اهداف بلندمدت و چشم‌انداز (۳ تا ۶ ماه)</h3>
+                <div id="long-term-goals-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; margin-bottom: 24px;">
+                    <!-- Loaded via JS -->
+                </div>
+
+                <!-- Communication Rules & Resources -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div style="background: rgba(0,0,0,0.3); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--glass-border);">
+                        <h4 style="font-weight: 700; color: var(--accent-blue); margin-bottom: 10px;">🌿 قواعد ارتباطی و مرزبندی:</h4>
+                        <ul id="comm-rules-list" style="padding-right: 20px; line-height: 1.8; font-size: 0.9rem;">
+                            <!-- Loaded via JS -->
+                        </ul>
+                    </div>
+                    <div style="background: rgba(0,0,0,0.3); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--glass-border);">
+                        <h4 style="font-weight: 700; color: var(--accent-amber); margin-bottom: 10px;">📞 سامانه‌های حمایتی رایگان:</h4>
+                        <div id="emergency-res-list" style="display: flex; flex-direction: column; gap: 8px;">
+                            <!-- Loaded via JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== TAB 3: MEMBERS MANAGEMENT (CRUD) ==================== -->
+        <section id="tab-members" class="tab-section" style="display: none;">
+            <div class="glass-panel" style="margin-bottom: 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <div>
+                        <h2 style="font-size: 1.3rem; font-weight: 700;">👥 مدیریت اعضای خانواده</h2>
+                        <p style="font-size: 0.85rem; color: var(--text-muted);">افزودن، ویرایش، حذف و اتصال حساب تلگرام هر عضو</p>
+                    </div>
+                    <button class="btn-glass btn-emerald" onclick="openModal('modal-add-member')">➕ افزودن عضو جدید</button>
+                </div>
+                <div id="members-full-list" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== TAB 4: CHORES & CALENDAR (CRUD) ==================== -->
+        <section id="tab-chores" class="tab-section" style="display: none;">
+            <div class="glass-panel">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <div>
+                        <h2 style="font-size: 1.3rem; font-weight: 700;">📅 ماتریس وظایف و چرخش مسئولیت‌ها</h2>
+                        <p style="font-size: 0.85rem; color: var(--text-muted);">تقسیم عادلانه وظایف منزل، نظافت، خرید و مراقبت</p>
+                    </div>
+                    <button class="btn-glass btn-primary" onclick="openModal('modal-add-chore')">➕ تعریف کار جدید</button>
+                </div>
+                <div class="chores-list" id="chores-manage-list">
+                    <!-- Loaded via JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== TAB 5: HABITS & HEALTH (CRUD) ==================== -->
+        <section id="tab-habits" class="tab-section" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div>
+                    <h2 style="font-size: 1.3rem; font-weight: 700;">🌿 عادت‌های دارویی، شناختی و ایمنی</h2>
+                    <p style="font-size: 0.85rem; color: var(--text-muted);">پایش عادات روزمره سلامت، آرام‌سازی و تمرین‌های اختصاصی هر عضو</p>
+                </div>
+                <button class="btn-glass btn-emerald" onclick="openModal('modal-add-habit')">➕ افزودن عادت جدید</button>
+            </div>
+            <div id="habits-container">
+                <!-- Loaded via JS -->
+            </div>
+        </section>
+
+        <!-- ==================== TAB 6: REPORTS & ANALYTICS ==================== -->
+        <section id="tab-reports" class="tab-section" style="display: none;">
+            <div class="dashboard-grid">
+                <div class="glass-panel min-w-0">
+                    <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 16px;">📈 نمودار خلق‌وخوی اعضا (داده‌های واقعی)</h3>
+                    <div style="height: 280px; position: relative;">
+                        <canvas id="moodChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="glass-panel min-w-0">
+                    <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 16px;">🧠 آخرین تحلیل‌های هوش مصنوعی</h3>
+                    <div id="recent-reports-container">
+                        <!-- Loaded via JS -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== TAB 7: SETTINGS & API KEYS ==================== -->
+        <section id="tab-settings" class="tab-section" style="display: none;">
+            <div class="glass-panel" style="max-width: 800px; margin: 0 auto;">
+                <h2 style="font-size: 1.3rem; font-weight: 700; margin-bottom: 6px;">⚙️ تنظیمات سامانه، توکن ربات و کلیدهای هوش مصنوعی</h2>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 24px;">هر کاربر یا عامل هوشمند می‌تواند تنظیمات و توکن‌های اختصاصی خود را در اینجا ثبت و تست کند.</p>
+
+                <form id="form-settings">
+                    <!-- Telegram Settings -->
+                    <h3 style="font-size: 1.05rem; font-weight: 700; color: var(--accent-blue); margin-bottom: 12px;">📱 تنظیمات ربات تلگرام</h3>
+                    <div class="form-group">
+                        <label class="form-label">توکن ربات تلگرام (از @BotFather):</label>
+                        <input type="text" class="glass-input" id="setting-telegram-token" placeholder="مثال: 123456789:ABCdefGhIJKlmnoPQRsTUVwxyZ">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">آدرس پروکسی (اختیاری در ایران):</label>
+                            <input type="text" class="glass-input" id="setting-telegram-proxy" placeholder="socks5h://127.0.0.1:10808">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">وضعیت پروکسی:</label>
+                            <select class="glass-input" id="setting-use-proxy">
+                                <option value="true">فعال (Proxy ON)</option>
+                                <option value="false">مستقیم (Direct)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-glass" id="btn-test-telegram" style="margin-bottom: 24px;">🔍 تست اتصال به تلگرام</button>
+
+                    <!-- AI Settings -->
+                    <h3 style="font-size: 1.05rem; font-weight: 700; color: var(--accent-purple); margin-bottom: 12px;">🧠 تنظیمات هوش مصنوعی (LLM Provider)</h3>
+                    <div class="form-group">
+                        <label class="form-label">ارائه‌دهنده مدل (Provider):</label>
+                        <select class="glass-input" id="setting-llm-provider">
+                            <option value="openai_compatible">OpenAI-Compatible Endpoint (Local Proxy / Ollama / OpenAI)</option>
+                            <option value="gemini_native">Google Gemini API (مستقیم)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">کلید اختصاصی Google Gemini API (در صورت انتخاب Gemini):</label>
+                        <input type="password" class="glass-input" id="setting-gemini-key" placeholder="AIzaSy...">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">آدرس اندپوینت پایه (Base URL):</label>
+                            <input type="text" class="glass-input" id="setting-llm-url" placeholder="http://localhost:20128/v1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">نام مدل (Model):</label>
+                            <input type="text" class="glass-input" id="setting-llm-model" placeholder="telegram-agent">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">کلید API سرور OpenAI (اختیاری):</label>
+                        <input type="password" class="glass-input" id="setting-llm-key" placeholder="sk-...">
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-bottom: 24px;">
+                        <button type="button" class="btn-glass" id="btn-test-ai">🔍 تست ارتباط با هوش مصنوعی</button>
+                        <button type="button" class="btn-glass" style="color: var(--accent-rose);" id="btn-reset-db">⚠️ پاکسازی کامل دیتابیس</button>
+                    </div>
+
+                    <button type="submit" class="btn-glass btn-primary" style="width: 100%; padding: 14px; font-size: 1rem;">
+                        💾 ذخیره تمامی تنظیمات
+                    </button>
+                </form>
+            </div>
+        </section>
+    </div>
+
+    <!-- ==================== MODALS ==================== -->
+    <!-- Modal: Add Member -->
+    <div class="modal-backdrop" id="modal-add-member">
+        <div class="glass-panel modal-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
+                <h3 style="font-size: 1.2rem; font-weight: 700;">➕ افزودن عضو جدید به خانواده</h3>
+                <button class="btn-glass" style="padding: 4px 10px;" onclick="closeModal('modal-add-member')">✕</button>
+            </div>
+            <form id="form-add-member">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">نام فارسی:</label>
+                        <input type="text" class="glass-input" id="member-name-fa" required placeholder="مثال: پدر / مریم">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">نام لاتین:</label>
+                        <input type="text" class="glass-input" id="member-name-en" required placeholder="Father / Maryam">
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">نقش:</label>
+                        <select class="glass-input" id="member-role">
+                            <option value="father">پدر (Father)</option>
+                            <option value="mother">مادر (Mother)</option>
+                            <option value="sister">خواهر (Sister)</option>
+                            <option value="brother">برادر (Brother)</option>
+                            <option value="user">من / راهبر (Leader)</option>
+                            <option value="child">فرزند (Child)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">سن:</label>
+                        <input type="number" class="glass-input" id="member-age" placeholder="65">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">اموجی / آواتار:</label>
+                        <input type="text" class="glass-input" id="member-avatar" value="👤">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">توضیحات، چالش‌ها یا وضعیت بالینی:</label>
+                    <textarea class="glass-input" id="member-conditions" rows="2" placeholder="مثال: دمانس خفیف، نیاز به مراقبت زنده و وظایف سبک..."></textarea>
+                </div>
+                <div style="display: flex; gap: 20px; margin-bottom: 16px;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; cursor: pointer;">
+                        <input type="checkbox" id="member-is-leader"> راهبر سامانه است
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; cursor: pointer;">
+                        <input type="checkbox" id="member-is-co-leader"> همیار راهبر است
+                    </label>
+                </div>
+                <button type="submit" class="btn-glass btn-emerald" style="width: 100%; padding: 12px;">ذخیره عضو</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Edit Member -->
+    <div class="modal-backdrop" id="modal-edit-member">
+        <div class="glass-panel modal-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
+                <h3 style="font-size: 1.2rem; font-weight: 700;">✏️ ویرایش مشخصات عضو</h3>
+                <button class="btn-glass" style="padding: 4px 10px;" onclick="closeModal('modal-edit-member')">✕</button>
+            </div>
+            <form id="form-edit-member">
+                <input type="hidden" id="edit-member-id">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">نام فارسی:</label>
+                        <input type="text" class="glass-input" id="edit-member-name-fa" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">نام لاتین:</label>
+                        <input type="text" class="glass-input" id="edit-member-name-en" required>
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">نقش:</label>
+                        <select class="glass-input" id="edit-member-role">
+                            <option value="father">پدر (Father)</option>
+                            <option value="mother">مادر (Mother)</option>
+                            <option value="sister">خواهر (Sister)</option>
+                            <option value="brother">برادر (Brother)</option>
+                            <option value="user">من / راهبر (Leader)</option>
+                            <option value="child">فرزند (Child)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">سن:</label>
+                        <input type="number" class="glass-input" id="edit-member-age">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">اموجی:</label>
+                        <input type="text" class="glass-input" id="edit-member-avatar">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">توضیحات و چالش‌ها:</label>
+                    <textarea class="glass-input" id="edit-member-conditions" rows="2"></textarea>
+                </div>
+                <button type="submit" class="btn-glass btn-primary" style="width: 100%; padding: 12px;">ذخیره تغییرات</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Add Chore -->
+    <div class="modal-backdrop" id="modal-add-chore">
+        <div class="glass-panel modal-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
+                <h3 style="font-size: 1.2rem; font-weight: 700;">➕ تعریف وظیفه جدید در منزل</h3>
+                <button class="btn-glass" style="padding: 4px 10px;" onclick="closeModal('modal-add-chore')">✕</button>
+            </div>
+            <form id="form-add-chore">
+                <div class="form-group">
+                    <label class="form-label">عنوان کار (فارسی):</label>
+                    <input type="text" class="glass-input" id="chore-title-fa" required placeholder="مثال: شستن ظروف بعد ناهار">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">دسته‌بندی:</label>
+                        <select class="glass-input" id="chore-category">
+                            <option value="kitchen">آشپزخانه 🍽️</option>
+                            <option value="cleaning">نظافت خانه 🧹</option>
+                            <option value="groceries">خرید و نان 🥖</option>
+                            <option value="plants_pets">پرنده و گیاهان 🐦🌱</option>
+                            <option value="caregiving">مراقبت و همراهی 🚶‍♂️</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">تکرار:</label>
+                        <select class="glass-input" id="chore-frequency">
+                            <option value="daily">روزانه</option>
+                            <option value="every_2_days">یک روز در میان</option>
+                            <option value="weekly">هفتگی</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">مسئول پیش‌فرض:</label>
+                        <select class="glass-input" id="chore-assignee-select">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">آیکون:</label>
+                        <input type="text" class="glass-input" id="chore-icon" value="📋">
+                    </div>
+                </div>
+                <button type="submit" class="btn-glass btn-primary" style="width: 100%; padding: 12px;">ذخیره و زمان‌بندی کار</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Add Habit -->
+    <div class="modal-backdrop" id="modal-add-habit">
+        <div class="glass-panel modal-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
+                <h3 style="font-size: 1.2rem; font-weight: 700;">➕ تعریف عادت و داربست سلامتی</h3>
+                <button class="btn-glass" style="padding: 4px 10px;" onclick="closeModal('modal-add-habit')">✕</button>
+            </div>
+            <form id="form-add-habit">
+                <div class="form-group">
+                    <label class="form-label">عنوان عادت (فارسی):</label>
+                    <input type="text" class="glass-input" id="habit-title-fa" required placeholder="مثال: تمرین تنفس ۴-۷-۸ در هنگام خشم">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">عضو مربوطه:</label>
+                        <select class="glass-input" id="habit-member-select">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">نوع عادت:</label>
+                        <select class="glass-input" id="habit-category">
+                            <option value="cognitive">شناختی / دمانس 🧠</option>
+                            <option value="emotional">مهار خشم و آرامش 🌸</option>
+                            <option value="bonding">پیوند و قدردانی 🤝</option>
+                            <option value="immune">ایمنی و بهداشت 🧼</option>
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="btn-glass btn-emerald" style="width: 100%; padding: 12px;">ذخیره عادت</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Log Conflict -->
+    <div class="modal-backdrop" id="modal-log-conflict">
+        <div class="glass-panel modal-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
+                <h3 style="font-size: 1.2rem; font-weight: 700;">🕊️ ثبت رویداد تنش / تعارض</h3>
+                <button class="btn-glass" style="padding: 4px 10px;" onclick="closeModal('modal-log-conflict')">✕</button>
+            </div>
+            <form id="form-log-conflict">
+                <div class="form-group">
+                    <label class="form-label">افراد درگیر در تنش:</label>
+                    <input type="text" class="glass-input" id="conflict-involved" placeholder="مثال: مادر و رضا">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">محرک یا دلیل تنش:</label>
+                    <textarea class="glass-input" id="conflict-trigger" rows="2" placeholder="مثال: تاخیر در انجام کار خانه و خستگی..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">شدت تنش (۱ تا ۵):</label>
+                    <select class="glass-input" id="conflict-severity">
+                        <option value="1">۱ - جروبحث خفیف و گذرا</option>
+                        <option value="2">۲ - دلخوری و سکوت</option>
+                        <option value="3">۳ - داد و فریاد متوسط</option>
+                        <option value="4">۴ - تنش شدید و طولانی</option>
+                        <option value="5">۵ - بحران عاطفی حاد</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn-glass btn-primary" style="width: 100%; padding: 12px;">ثبت در پایگاه داده</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Send Broadcast -->
+    <div class="modal-backdrop" id="modal-broadcast">
+        <div class="glass-panel modal-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
+                <h3 style="font-size: 1.2rem; font-weight: 700;">📢 ارسال پیام همگانی در تلگرام</h3>
+                <button class="btn-glass" style="padding: 4px 10px;" onclick="closeModal('modal-broadcast')">✕</button>
+            </div>
+            <div class="form-group">
+                <label class="form-label">متن پیام (برای تمام اعضایی که تلگرام را متصل کرده‌اند ارسال می‌شود):</label>
+                <textarea class="glass-input" id="broadcast-text" rows="5" placeholder="سلام به همگی، جلسه امشب ساعت ۸ یادتون نره..."></textarea>
+            </div>
+            <button class="btn-glass btn-primary" id="btn-send-broadcast" style="width: 100%; padding: 12px;">
+                ارسال فوری در تلگرام
+            </button>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

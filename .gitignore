@@ -1,0 +1,63 @@
+# ==========================================
+# Comprehensive .gitignore for Family Evolution
+# ==========================================
+
+# 1. Databases & SQLite Storage (Strictly excluded)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+data/family.db
+data/test_family.db
+
+# 2. Local Configuration & Secrets
+data/config.json
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.p12
+
+# 3. Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# 4. Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# 5. Logs & Temporary Files
+*.log
+logs/
+*.tmp
+*.bak
+*.swp
+*~
+
+# 6. IDEs & Operating System Artifacts
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+.DS_Store
+Thumbs.db
+desktop.ini
