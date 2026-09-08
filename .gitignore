@@ -62,7 +62,10 @@ logs/
 Thumbs.db
 desktop.ini
 
-# 7. Personal Family Instances (Private data, local runtime)
+# 7. Personal Family Instances & Local Agent Artifacts
 my_family/
 personal/
 instance/
+.gemini/
+agent_inbox.md
+FEEDBACK_PROMPT.md

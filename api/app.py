@@ -51,7 +51,8 @@ from data.database import (
     get_stats_summary,
     get_latest_reports,
     generate_schedule_for_days,
-    get_weekly_matrix
+    get_weekly_matrix,
+    rotate_chores_now
 )
 from brain.ai_engine import ai_engine
 from brain.reporter import generate_weekly_analysis
@@ -102,6 +103,8 @@ class ChoreCreateReq(BaseModel):
     category: str = "cleaning"
     frequency: str = "daily"
     default_assignee_id: Optional[int] = None
+    is_rotational: Optional[bool] = False
+    rotation_pool: Optional[List[int]] = None
     difficulty: Optional[str] = "medium"
     icon: Optional[str] = "📋"
 
@@ -111,6 +114,8 @@ class ChoreUpdateReq(BaseModel):
     category: str
     frequency: str
     default_assignee_id: Optional[int] = None
+    is_rotational: Optional[bool] = None
+    rotation_pool: Optional[List[int]] = None
     difficulty: Optional[str] = "medium"
     icon: Optional[str] = "📋"
 
@@ -375,7 +380,9 @@ async def api_create_chore(req: ChoreCreateReq):
         frequency=req.frequency,
         default_assignee_id=req.default_assignee_id,
         difficulty=req.difficulty or "medium",
-        icon=req.icon or "📋"
+        icon=req.icon or "📋",
+        is_rotational=bool(req.is_rotational),
+        rotation_pool=req.rotation_pool
     )
     return {"status": "ok", "chore_id": cid}
 
@@ -389,11 +396,18 @@ async def api_update_chore(chore_id: int, req: ChoreUpdateReq):
         frequency=req.frequency,
         default_assignee_id=req.default_assignee_id,
         difficulty=req.difficulty or "medium",
-        icon=req.icon or "📋"
+        icon=req.icon or "📋",
+        is_rotational=req.is_rotational,
+        rotation_pool=req.rotation_pool
     )
     if not ok:
         raise HTTPException(status_code=404, detail="Chore not found")
     return {"status": "ok"}
+
+@app.post("/api/chores/rotate")
+async def api_rotate_chores():
+    res = rotate_chores_now(days_ahead=7)
+    return res
 
 @app.delete("/api/chores/{chore_id}")
 async def api_delete_chore(chore_id: int):

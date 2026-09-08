@@ -16,7 +16,7 @@ def get_db_connection() -> sqlite3.Connection:
     return conn
 
 def init_db(seed_defaults: bool = False):
-    """Initialize clean database tables without any hardcoded mock data."""
+    """Initialize clean database tables and migrate missing columns safely."""
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -24,6 +24,16 @@ def init_db(seed_defaults: bool = False):
     with open(schema_path, "r", encoding="utf-8") as f:
         cursor.executescript(f.read())
     
+    # Safe migrations for existing databases
+    cursor.execute("PRAGMA table_info(chores)")
+    existing_cols = {col["name"] for col in cursor.fetchall()}
+    if "is_rotational" not in existing_cols:
+        cursor.execute("ALTER TABLE chores ADD COLUMN is_rotational INTEGER DEFAULT 0")
+    if "rotation_pool_json" not in existing_cols:
+        cursor.execute("ALTER TABLE chores ADD COLUMN rotation_pool_json TEXT")
+    if "current_rotation_index" not in existing_cols:
+        cursor.execute("ALTER TABLE chores ADD COLUMN current_rotation_index INTEGER DEFAULT 0")
+
     conn.commit()
     conn.close()
 
@@ -164,15 +174,28 @@ def initialize_full_family_template(template_json: dict) -> Dict[str, Any]:
         freq = c.get("frequency", "daily")
         assignee_name = c.get("assigned_to", "")
         icon = c.get("icon", "📋")
+        difficulty = c.get("difficulty", "medium")
+        is_rotational = 1 if c.get("is_rotational") else 0
+        
+        # Build rotation pool from names or IDs
+        pool_raw = c.get("rotation_pool", [])
+        pool_ids = []
+        for item in pool_raw:
+            if isinstance(item, int):
+                pool_ids.append(item)
+            elif item in member_map:
+                pool_ids.append(member_map[item])
         
         assignee_id = member_map.get(assignee_name)
-        if not assignee_id and member_map:
+        if not assignee_id and pool_ids:
+            assignee_id = pool_ids[0]
+        elif not assignee_id and member_map:
             assignee_id = list(member_map.values())[0]
 
         cursor.execute(
-            """INSERT INTO chores (title_fa, title_en, category, frequency, default_assignee_id, icon)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (title_fa, title_en, category, freq, assignee_id, icon)
+            """INSERT INTO chores (title_fa, title_en, category, frequency, default_assignee_id, is_rotational, rotation_pool_json, difficulty, icon)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (title_fa, title_en, category, freq, assignee_id, is_rotational, json.dumps(pool_ids, ensure_ascii=False) if pool_ids else None, difficulty, icon)
         )
 
     # 5. Habits
@@ -431,43 +454,63 @@ def get_intervention_history(limit: int = 10) -> List[Dict[str, Any]]:
 
 # --- Chores CRUD ---
 
+# --- Chores CRUD & Intelligent Dynamic Rotation ---
+
 def create_chore(title_fa: str, title_en: str, category: str, frequency: str, 
-                 default_assignee_id: Optional[int], difficulty: str = "medium", icon: str = "📋") -> int:
+                 default_assignee_id: Optional[int], difficulty: str = "medium", icon: str = "📋",
+                 is_rotational: bool = False, rotation_pool: Optional[List[int]] = None) -> int:
     conn = get_db_connection()
     cursor = conn.cursor()
+    pool_json = json.dumps(rotation_pool, ensure_ascii=False) if rotation_pool else None
+    
+    # If default assignee is not explicitly set but rotation pool is given, pick first member
+    if not default_assignee_id and rotation_pool:
+        default_assignee_id = rotation_pool[0]
+
     cursor.execute(
-        """INSERT INTO chores (title_fa, title_en, category, frequency, default_assignee_id, difficulty, icon)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (title_fa, title_en, category, frequency, default_assignee_id, difficulty, icon)
+        """INSERT INTO chores (title_fa, title_en, category, frequency, default_assignee_id, difficulty, icon, is_rotational, rotation_pool_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (title_fa, title_en, category, frequency, default_assignee_id, difficulty, icon, 1 if is_rotational else 0, pool_json)
     )
     chore_id = cursor.lastrowid
     conn.commit()
     
-    if default_assignee_id:
-        today_str = date.today().isoformat()
-        cursor.execute(
-            """INSERT INTO chore_schedule (chore_id, member_id, date, status)
-               VALUES (?, ?, ?, 'pending')""",
-            (chore_id, default_assignee_id, today_str)
-        )
-        conn.commit()
-
+    generate_schedule_for_days(conn_or_days=conn, days_ahead=7)
     conn.close()
     return chore_id
 
 def update_chore(chore_id: int, title_fa: str, title_en: str, category: str, frequency: str, 
-                 default_assignee_id: Optional[int], difficulty: str = "medium", icon: str = "📋") -> bool:
+                 default_assignee_id: Optional[int], difficulty: str = "medium", icon: str = "📋",
+                 is_rotational: Optional[bool] = None, rotation_pool: Optional[List[int]] = None) -> bool:
     conn = get_db_connection()
     cursor = conn.cursor()
+    
+    cursor.execute("SELECT * FROM chores WHERE id = ?", (chore_id,))
+    current = cursor.fetchone()
+    if not current:
+        conn.close()
+        return False
+        
+    new_is_rot = current["is_rotational"] if is_rotational is None else (1 if is_rotational else 0)
+    new_pool = current["rotation_pool_json"] if rotation_pool is None else (json.dumps(rotation_pool, ensure_ascii=False) if rotation_pool else None)
+    
+    if not default_assignee_id and rotation_pool:
+        default_assignee_id = rotation_pool[0]
+
     cursor.execute(
         """UPDATE chores 
            SET title_fa = ?, title_en = ?, category = ?, frequency = ?, 
-               default_assignee_id = ?, difficulty = ?, icon = ?
+               default_assignee_id = ?, difficulty = ?, icon = ?,
+               is_rotational = ?, rotation_pool_json = ?
            WHERE id = ?""",
-        (title_fa, title_en, category, frequency, default_assignee_id, difficulty, icon, chore_id)
+        (title_fa, title_en, category, frequency, default_assignee_id, difficulty, icon, new_is_rot, new_pool, chore_id)
     )
     affected = cursor.rowcount > 0
     conn.commit()
+    
+    # Re-align future pending schedules with the updated rotation
+    if affected:
+        rotate_chores_now(conn_or_days=conn, days_ahead=7)
     conn.close()
     return affected
 
@@ -490,11 +533,21 @@ def get_all_chores() -> List[Dict[str, Any]]:
            LEFT JOIN members m ON c.default_assignee_id = m.id
            ORDER BY c.id ASC"""
     )
-    rows = [dict(r) for r in cursor.fetchall()]
+    rows = []
+    for r in cursor.fetchall():
+        item = dict(r)
+        item["is_rotational"] = bool(item.get("is_rotational", 0))
+        item["rotation_pool"] = json.loads(item["rotation_pool_json"]) if item.get("rotation_pool_json") else []
+        rows.append(item)
     conn.close()
     return rows
 
 def generate_schedule_for_days(conn_or_days: Any = 7, days_ahead: int = 7):
+    """
+    Generates intelligent chore schedules across calendar days.
+    - If chore is rotational: rotates deterministically & fairly across eligible member IDs.
+    - If chore is dedicated (e.g. Elderly / Father gardening, Mother tea): maintains assigned member.
+    """
     should_close = False
     if isinstance(conn_or_days, (int, float)):
         days_ahead = int(conn_or_days)
@@ -507,35 +560,66 @@ def generate_schedule_for_days(conn_or_days: Any = 7, days_ahead: int = 7):
         conn = conn_or_days
 
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM chores WHERE default_assignee_id IS NOT NULL")
+    cursor.execute("SELECT * FROM chores")
     chores = cursor.fetchall()
     
     today = date.today()
     for i in range(days_ahead + 1):
-        curr_date = (today + timedelta(days=i)).isoformat()
+        target_date_obj = today + timedelta(days=i)
+        curr_date = target_date_obj.isoformat()
+        
         for chore in chores:
             chore_id = chore["id"]
-            assignee_id = chore["default_assignee_id"]
             freq = chore["frequency"]
+            is_rot = bool(chore["is_rotational"]) if "is_rotational" in chore.keys() else False
+            pool_raw = chore["rotation_pool_json"] if "rotation_pool_json" in chore.keys() else None
+            pool = json.loads(pool_raw) if pool_raw else []
             
+            # Frequency filtering
             if freq == "every_2_days" and i % 2 != 0:
                 continue
-            if freq == "weekly" and i != 0 and i != 6:
+            if freq == "twice_weekly" and target_date_obj.weekday() not in [1, 4]: # Tuesdays & Fridays
                 continue
-            
+            if freq == "weekly" and target_date_obj.weekday() != 4: # Fridays
+                continue
+
+            # Determine assignee for this specific date
+            if is_rot and pool:
+                # Fair deterministic round-robin based on date and chore offset
+                day_offset = target_date_obj.toordinal()
+                assignee_id = pool[(day_offset + chore_id) % len(pool)]
+            else:
+                assignee_id = chore["default_assignee_id"]
+
+            if not assignee_id:
+                continue
+
             cursor.execute(
-                "SELECT id FROM chore_schedule WHERE chore_id = ? AND date = ?",
+                "SELECT id, status, member_id FROM chore_schedule WHERE chore_id = ? AND date = ?",
                 (chore_id, curr_date)
             )
-            if not cursor.fetchone():
+            existing = cursor.fetchone()
+            if not existing:
                 cursor.execute(
                     """INSERT INTO chore_schedule (chore_id, member_id, date, status)
                        VALUES (?, ?, ?, 'pending')""",
                     (chore_id, assignee_id, curr_date)
                 )
+            elif is_rot and pool and existing["status"] == "pending" and existing["member_id"] != assignee_id:
+                # Update pending schedule to match latest rotation rule
+                cursor.execute(
+                    "UPDATE chore_schedule SET member_id = ? WHERE id = ?",
+                    (assignee_id, existing["id"])
+                )
+
     conn.commit()
     if should_close:
         conn.close()
+
+def rotate_chores_now(conn_or_days: Any = 7, days_ahead: int = 7) -> Dict[str, Any]:
+    """Force re-computes and balances rotational schedules for upcoming days."""
+    generate_schedule_for_days(conn_or_days=conn_or_days, days_ahead=days_ahead)
+    return {"status": "ok", "message": "Chore rotation synchronized across upcoming days."}
 
 def get_today_chores_for_member(member_id: int) -> List[Dict[str, Any]]:
     conn = get_db_connection()

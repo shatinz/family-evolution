@@ -37,10 +37,12 @@ from data.database import (
     log_checkin,
     log_conflict,
     get_stats_summary,
-    get_weekly_matrix
+    get_weekly_matrix,
+    rotate_chores_now
 )
 from brain.ai_engine import ai_engine
 from brain.reporter import generate_weekly_analysis
+from mcp_server import TOOLS, handle_tool_call
 from api.app import app
 
 class TestScalableFamilyEvolution(unittest.TestCase):
@@ -261,6 +263,59 @@ class TestScalableFamilyEvolution(unittest.TestCase):
             self.assertEqual(backup_res.json()["status"], "ok")
         else:
             self.assertIn("detail", backup_res.json())
+
+    def test_07_intelligent_chore_rotation_algorithm(self):
+        m1 = create_member(name="Sister", name_fa="خواهر", role="sister", age=28)
+        m2 = create_member(name="Brother", name_fa="برادر", role="brother", age=22)
+        
+        # Create rotational chore
+        cid = create_chore(
+            title_fa="شستن ظروف چرخشی",
+            title_en="Rotating dishwashing",
+            category="kitchen",
+            frequency="daily",
+            default_assignee_id=m1,
+            is_rotational=True,
+            rotation_pool=[m1, m2]
+        )
+        self.assertGreater(cid, 0)
+
+        # Trigger rotation
+        rot_res = rotate_chores_now(days_ahead=7)
+        self.assertEqual(rot_res["status"], "ok")
+
+        # API rotation trigger
+        api_rot = self.client.post("/api/chores/rotate")
+        self.assertEqual(api_rot.status_code, 200)
+
+        delete_member(m1)
+        delete_member(m2)
+        delete_chore(cid)
+
+    def test_08_mcp_server_protocol_and_tools(self):
+        import asyncio
+        # Verify MCP tool definitions
+        self.assertGreaterEqual(len(TOOLS), 7)
+        tool_names = [t["name"] for t in TOOLS]
+        self.assertIn("get_family_status", tool_names)
+        self.assertIn("get_weekly_chore_matrix", tool_names)
+        self.assertIn("rotate_chores_schedule", tool_names)
+        self.assertIn("generate_weekly_ai_report", tool_names)
+        self.assertIn("backup_database_to_telegram", tool_names)
+
+        # Call get_family_status tool via handler
+        status_res = asyncio.run(handle_tool_call("get_family_status", {"days": 7}))
+        self.assertIn("content", status_res)
+        self.assertEqual(status_res["content"][0]["type"], "text")
+        parsed = json.loads(status_res["content"][0]["text"])
+        self.assertIn("members_count", parsed)
+
+        # Call get_weekly_chore_matrix tool via handler
+        matrix_res = asyncio.run(handle_tool_call("get_weekly_chore_matrix", {"week_offset": 0}))
+        self.assertIn("content", matrix_res)
+        parsed_matrix = json.loads(matrix_res["content"][0]["text"])
+        self.assertIn("days", parsed_matrix)
+        self.assertEqual(len(parsed_matrix["days"]), 7)
 
 if __name__ == "__main__":
     unittest.main()

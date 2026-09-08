@@ -102,6 +102,9 @@ CREATE TABLE IF NOT EXISTS chores (
     category TEXT NOT NULL DEFAULT 'cleaning',
     frequency TEXT NOT NULL DEFAULT 'daily',
     default_assignee_id INTEGER,
+    is_rotational INTEGER DEFAULT 0,
+    rotation_pool_json TEXT, -- JSON array of member IDs eligible for rotation
+    current_rotation_index INTEGER DEFAULT 0,
     difficulty TEXT DEFAULT 'medium',
     icon TEXT DEFAULT '📋',
     FOREIGN KEY(default_assignee_id) REFERENCES members(id) ON DELETE SET NULL
