@@ -171,12 +171,7 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Scheduler start warning: {e}")
     try:
-        telegram_bot.build_application()
-        if telegram_bot.app:
-            asyncio.create_task(telegram_bot.app.initialize())
-            asyncio.create_task(telegram_bot.app.start())
-            asyncio.create_task(telegram_bot.app.updater.start_polling(drop_pending_updates=True))
-            logger.info("Telegram Bot polling started.")
+        await telegram_bot.start_bot()
     except Exception as e:
         logger.error(f"Telegram Bot initialization warning: {e}")
 
@@ -184,10 +179,7 @@ async def startup_event():
 async def shutdown_event():
     try:
         family_scheduler.stop()
-        if telegram_bot.app and telegram_bot.app.updater:
-            await telegram_bot.app.updater.stop()
-            await telegram_bot.app.stop()
-            await telegram_bot.app.shutdown()
+        await telegram_bot.stop_bot()
     except Exception:
         pass
 

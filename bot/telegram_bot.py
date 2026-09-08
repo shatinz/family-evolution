@@ -55,6 +55,29 @@ class FamilyBot:
         self.bot_info: Optional[Dict[str, Any]] = None
         self.user_states: Dict[int, Dict[str, Any]] = {}
 
+    def _create_app(self, token: str, proxy: Optional[str] = None) -> Application:
+        request_kwargs = {"connect_timeout": 15.0, "read_timeout": 20.0}
+        if proxy:
+            request_kwargs["proxy"] = proxy
+        request = HTTPXRequest(**request_kwargs)
+        builder = Application.builder().token(token).request(request)
+        app = builder.build()
+
+        # Commands
+        app.add_handler(CommandHandler("start", self.cmd_start))
+        app.add_handler(CommandHandler("help", self.cmd_help))
+        app.add_handler(CommandHandler("chores", self.cmd_chores))
+        app.add_handler(CommandHandler("habits", self.cmd_habits))
+        app.add_handler(CommandHandler("calendar", self.cmd_calendar))
+        app.add_handler(CommandHandler("status", self.cmd_status))
+        app.add_handler(CommandHandler("evaluation", self.cmd_evaluation))
+        app.add_handler(CommandHandler("breathing", self.cmd_breathing))
+
+        # Callbacks & Text
+        app.add_handler(CallbackQueryHandler(self.handle_callback))
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text_message))
+        return app
+
     def build_application(self) -> Optional[Application]:
         """Build and configure the Telegram application instance"""
         token = config.telegram_bot_token
@@ -63,34 +86,66 @@ class FamilyBot:
             return None
 
         proxy = config.telegram_proxy if config.use_proxy else None
-        request_kwargs = {"connect_timeout": 15.0, "read_timeout": 20.0}
-        if proxy:
-            request_kwargs["proxy_url"] = proxy
-
         try:
-            request = HTTPXRequest(**request_kwargs)
-            builder = Application.builder().token(token).request(request)
-            app = builder.build()
-
-            # Commands
-            app.add_handler(CommandHandler("start", self.cmd_start))
-            app.add_handler(CommandHandler("help", self.cmd_help))
-            app.add_handler(CommandHandler("chores", self.cmd_chores))
-            app.add_handler(CommandHandler("habits", self.cmd_habits))
-            app.add_handler(CommandHandler("calendar", self.cmd_calendar))
-            app.add_handler(CommandHandler("status", self.cmd_status))
-            app.add_handler(CommandHandler("evaluation", self.cmd_evaluation))
-            app.add_handler(CommandHandler("breathing", self.cmd_breathing))
-
-            # Callbacks & Text
-            app.add_handler(CallbackQueryHandler(self.handle_callback))
-            app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text_message))
-
-            self.app = app
-            return app
+            self.app = self._create_app(token, proxy=proxy)
+            return self.app
         except Exception as e:
             logger.error(f"Error building telegram application: {e}")
             return None
+
+    async def start_bot(self):
+        """Initialize and start Telegram Bot polling with resilient fallback"""
+        token = config.telegram_bot_token
+        if not token:
+            logger.warning("No Telegram Bot Token configured.")
+            return
+
+        proxies_to_try = []
+        if config.use_proxy and config.telegram_proxy:
+            proxies_to_try.append(config.telegram_proxy)
+        proxies_to_try.append(None)  # Direct fallback
+
+        for p in proxies_to_try:
+            try:
+                self.app = self._create_app(token, proxy=p)
+                await self.app.initialize()
+                await self.app.start()
+                await self.app.updater.start_polling(drop_pending_updates=True)
+                me = await self.app.bot.get_me()
+                self.bot_info = {
+                    "id": me.id,
+                    "username": me.username,
+                    "first_name": me.first_name
+                }
+                logger.info(f"Telegram Bot @{me.username} ({me.first_name}) started polling successfully (Connection: {p or 'Direct'}).")
+                return
+            except Exception as e:
+                logger.warning(f"Connection attempt failed with {'proxy ' + str(p) if p else 'Direct'}: {e}")
+                if self.app:
+                    try:
+                        if self.app.updater and self.app.updater.running:
+                            await self.app.updater.stop()
+                        if self.app.running:
+                            await self.app.stop()
+                        await self.app.shutdown()
+                    except Exception:
+                        pass
+                self.app = None
+
+        logger.error("Failed to connect Telegram Bot across all connection attempts.")
+
+    async def stop_bot(self):
+        """Cleanly shutdown Telegram Bot updater and application"""
+        if self.app:
+            try:
+                if self.app.updater and self.app.updater.running:
+                    await self.app.updater.stop()
+                if self.app.running:
+                    await self.app.stop()
+                await self.app.shutdown()
+                logger.info("Telegram Bot stopped.")
+            except Exception as e:
+                logger.error(f"Error stopping telegram bot: {e}")
 
     def test_connection(self) -> Dict[str, Any]:
         """Directly tests Telegram API connectivity and returns verified bot info"""
