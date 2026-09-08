@@ -50,7 +50,8 @@ from data.database import (
     log_conflict,
     get_stats_summary,
     get_latest_reports,
-    generate_schedule_for_days
+    generate_schedule_for_days,
+    get_weekly_matrix
 )
 from brain.ai_engine import ai_engine
 from brain.reporter import generate_weekly_analysis
@@ -463,11 +464,37 @@ async def api_toggle_habit(req: HabitToggleReq):
     return {"status": "ok", "new_status": new_status}
 
 # --- Calendar & Stats ---
+@app.get("/api/calendar/weekly")
+async def api_get_weekly_matrix(week_offset: int = 0):
+    return get_weekly_matrix(week_offset=week_offset)
+
 @app.get("/api/calendar")
 async def api_get_calendar(start: Optional[str] = None, end: Optional[str] = None):
     start_date = start or (date.today() - timedelta(days=7)).isoformat()
     end_date = end or (date.today() + timedelta(days=14)).isoformat()
     return get_calendar_events(start_date, end_date)
+
+@app.get("/api/members/recipients")
+async def api_get_broadcast_recipients():
+    members = get_all_members()
+    return [
+        {
+            "id": m["id"],
+            "name_fa": m["name_fa"],
+            "avatar": m.get("avatar", "👤"),
+            "role": m["role"],
+            "is_linked": bool(m.get("telegram_id")),
+            "telegram_id": m.get("telegram_id")
+        }
+        for m in members
+    ]
+
+@app.post("/api/admin/send-backup-telegram")
+async def api_send_backup_telegram():
+    res = await telegram_bot.send_database_backup_to_admin()
+    if not res.get("ok"):
+        raise HTTPException(status_code=400, detail=res.get("error", "Failed to send backup"))
+    return res
 
 @app.get("/api/stats")
 async def api_get_stats(days: int = 7):

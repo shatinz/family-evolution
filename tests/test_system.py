@@ -36,7 +36,8 @@ from data.database import (
     toggle_habit_log,
     log_checkin,
     log_conflict,
-    get_stats_summary
+    get_stats_summary,
+    get_weekly_matrix
 )
 from brain.ai_engine import ai_engine
 from brain.reporter import generate_weekly_analysis
@@ -228,6 +229,38 @@ class TestScalableFamilyEvolution(unittest.TestCase):
         leader_report, family_broadcast, stats = generate_weekly_analysis(days=7)
         self.assertTrue(len(leader_report) > 0)
         self.assertTrue(len(family_broadcast) > 0)
+
+    def test_05_weekly_calendar_and_recipients(self):
+        # Weekly matrix API
+        res = self.client.get("/api/calendar/weekly?week_offset=0")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn("days", data)
+        self.assertEqual(len(data["days"]), 7)
+        self.assertIn("chores", data["days"][3])
+
+        # Direct database function
+        matrix = get_weekly_matrix(week_offset=0)
+        self.assertIn("days", matrix)
+        self.assertEqual(len(matrix["days"]), 7)
+        self.assertEqual(matrix["days"][0]["day_name_fa"], "شنبه")
+        self.assertEqual(matrix["days"][6]["day_name_fa"], "جمعه")
+
+        # Recipients endpoint
+        recipients_res = self.client.get("/api/members/recipients")
+        self.assertEqual(recipients_res.status_code, 200)
+        recipients_data = recipients_res.json()
+        self.assertIsInstance(recipients_data, list)
+        self.assertGreater(len(recipients_data), 0)
+
+    def test_06_database_backup_flow(self):
+        # Trigger backup endpoint (returns 400 when bot offline in test mode, or 200 when online)
+        backup_res = self.client.post("/api/admin/send-backup-telegram")
+        self.assertIn(backup_res.status_code, [200, 400])
+        if backup_res.status_code == 200:
+            self.assertEqual(backup_res.json()["status"], "ok")
+        else:
+            self.assertIn("detail", backup_res.json())
 
 if __name__ == "__main__":
     unittest.main()

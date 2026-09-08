@@ -13,29 +13,35 @@
 </head>
 <body>
     <div class="container">
-        <!-- Top Navigation -->
-        <header class="navbar">
-            <div class="brand">
-                <span class="brand-icon">🌱</span>
-                <span>خانواده‌یار <span style="font-size:0.75rem; font-weight:400; color:var(--text-muted);">Family Evolution</span></span>
-            </div>
-
-            <nav class="nav-tabs">
-                <button class="nav-tab active" data-target="tab-overview">🏠 نمای کلی</button>
-                <button class="nav-tab" data-target="tab-blueprint">🎯 اهداف و نقشه راه</button>
-                <button class="nav-tab" data-target="tab-members">👥 اعضای خانواده</button>
-                <button class="nav-tab" data-target="tab-chores">📅 تقویم و وظایف</button>
-                <button class="nav-tab" data-target="tab-habits">🌿 سلامت و عادت‌ها</button>
-                <button class="nav-tab" data-target="tab-reports">📊 ارزیابی و گزارش‌ها</button>
-                <button class="nav-tab" data-target="tab-settings">⚙️ تنظیمات</button>
-            </nav>
-
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <div class="badge badge-green" id="bot-status-badge" style="gap: 8px;">
-                    <div class="pulse-dot"></div>
-                    <span id="bot-status-text">ربات آنلاین</span>
+        <!-- Floating Apple-Grade Top Navigation Bar -->
+        <header class="navbar-wrapper">
+            <div class="navbar">
+                <div class="brand">
+                    <span class="brand-icon">🌱</span>
+                    <div class="brand-text">
+                        <span class="brand-title">خانواده‌یار</span>
+                        <span class="brand-sub">Family Evolution</span>
+                    </div>
                 </div>
-                <button class="btn-glass" onclick="openModal('modal-broadcast')">📢 پیام همگانی</button>
+
+                <nav class="nav-tabs">
+                    <button class="nav-tab active" data-target="tab-overview">🏠 نمای کلی</button>
+                    <button class="nav-tab" data-target="tab-chores">📅 تقویم هفتگی و وظایف</button>
+                    <button class="nav-tab" data-target="tab-members">👥 اعضای خانواده</button>
+                    <button class="nav-tab" data-target="tab-habits">🌿 سلامت و عادت‌ها</button>
+                    <button class="nav-tab" data-target="tab-blueprint">🎯 نقشه راه</button>
+                    <button class="nav-tab" data-target="tab-reports">📊 ارزیابی و گزارش‌ها</button>
+                    <button class="nav-tab" data-target="tab-settings">⚙️ تنظیمات</button>
+                </nav>
+
+                <div class="navbar-actions">
+                    <div class="bot-badge" id="bot-status-badge">
+                        <div class="pulse-dot"></div>
+                        <span id="bot-status-text">ربات آنلاین</span>
+                    </div>
+                    <button class="btn-glass btn-sm" onclick="openModal('modal-broadcast')">📢 پیام همگانی</button>
+                    <button class="btn-glass btn-sm btn-icon" id="btn-quick-backup" title="ارسال فایل پشتیبان پایگاه داده به تلگرام راهبر">💾 پشتیبان DB</button>
+                </div>
             </div>
         </header>
 
@@ -107,7 +113,74 @@
             </div>
         </section>
 
-        <!-- ==================== TAB 2: BLUEPRINT & GOALS ==================== -->
+        <!-- ==================== TAB 2: CHORES & WEEKLY CALENDAR MATRIX ==================== -->
+        <section id="tab-chores" class="tab-section" style="display: none;">
+            <!-- Weekly Chore Matrix Calendar -->
+            <div class="glass-panel" style="margin-bottom: 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 12px;">
+                    <div>
+                        <h2 style="font-size: 1.3rem; font-weight: 700;">📅 تقویم ماتریسی هفتگی کارهای خانه</h2>
+                        <p style="font-size: 0.85rem; color: var(--text-muted);" id="weekly-calendar-range">نمای تفکیکی وظایف از شنبه تا جمعه</p>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button class="btn-glass" id="btn-prev-week" style="padding: 6px 14px;">❮ هفته قبل</button>
+                        <button class="btn-glass btn-primary" id="btn-current-week" style="padding: 6px 14px;">امروز (جاری)</button>
+                        <button class="btn-glass" id="btn-next-week" style="padding: 6px 14px;">هفته بعد ❯</button>
+                    </div>
+                </div>
+
+                <!-- 7 Day Matrix Grid -->
+                <div class="week-matrix-grid" id="week-matrix-container">
+                    <!-- Populated dynamically via JS -->
+                </div>
+            </div>
+
+            <!-- Chores Management CRUD -->
+            <div class="glass-panel">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <div>
+                        <h3 style="font-size: 1.2rem; font-weight: 700;">⚙️ مدیریت و تعریف وظایف خانه</h3>
+                        <p style="font-size: 0.85rem; color: var(--text-muted);">تعریف کارهای جدید، ویرایش تکرار و مسئولین پیش‌فرض</p>
+                    </div>
+                    <button class="btn-glass btn-primary" onclick="openModal('modal-add-chore')">➕ تعریف کار جدید</button>
+                </div>
+                <div class="chores-list" id="chores-manage-list">
+                    <!-- Loaded via JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== TAB 3: MEMBERS MANAGEMENT (CRUD) ==================== -->
+        <section id="tab-members" class="tab-section" style="display: none;">
+            <div class="glass-panel" style="margin-bottom: 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <div>
+                        <h2 style="font-size: 1.3rem; font-weight: 700;">👥 مدیریت اعضای خانواده</h2>
+                        <p style="font-size: 0.85rem; color: var(--text-muted);">افزودن، ویرایش، سابقه پزشکی، رضایت‌نامه و اتصال تلگرام هر عضو</p>
+                    </div>
+                    <button class="btn-glass btn-emerald" onclick="openModal('modal-add-member')">➕ افزودن عضو جدید</button>
+                </div>
+                <div id="members-full-list" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== TAB 4: HABITS & HEALTH (CRUD) ==================== -->
+        <section id="tab-habits" class="tab-section" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div>
+                    <h2 style="font-size: 1.3rem; font-weight: 700;">🌿 عادت‌های دارویی، شناختی و ایمنی</h2>
+                    <p style="font-size: 0.85rem; color: var(--text-muted);">پایش عادات روزمره سلامت، آرام‌سازی و تمرین‌های اختصاصی هر عضو</p>
+                </div>
+                <button class="btn-glass btn-emerald" onclick="openModal('modal-add-habit')">➕ افزودن عادت جدید</button>
+            </div>
+            <div id="habits-container">
+                <!-- Loaded via JS -->
+            </div>
+        </section>
+
+        <!-- ==================== TAB 5: BLUEPRINT & GOALS ==================== -->
         <section id="tab-blueprint" class="tab-section" style="display: none;">
             <div class="glass-panel" style="margin-bottom: 24px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -147,57 +220,11 @@
             </div>
         </section>
 
-        <!-- ==================== TAB 3: MEMBERS MANAGEMENT (CRUD) ==================== -->
-        <section id="tab-members" class="tab-section" style="display: none;">
-            <div class="glass-panel" style="margin-bottom: 24px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <div>
-                        <h2 style="font-size: 1.3rem; font-weight: 700;">👥 مدیریت اعضای خانواده</h2>
-                        <p style="font-size: 0.85rem; color: var(--text-muted);">افزودن، ویرایش، سابقه پزشکی، رضایت‌نامه و اتصال تلگرام هر عضو</p>
-                    </div>
-                    <button class="btn-glass btn-emerald" onclick="openModal('modal-add-member')">➕ افزودن عضو جدید</button>
-                </div>
-                <div id="members-full-list" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;">
-                    <!-- Populated by JS -->
-                </div>
-            </div>
-        </section>
-
-        <!-- ==================== TAB 4: CHORES & CALENDAR (CRUD) ==================== -->
-        <section id="tab-chores" class="tab-section" style="display: none;">
-            <div class="glass-panel">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <div>
-                        <h2 style="font-size: 1.3rem; font-weight: 700;">📅 ماتریس وظایف و چرخش مسئولیت‌ها</h2>
-                        <p style="font-size: 0.85rem; color: var(--text-muted);">تقسیم عادلانه وظایف منزل، نظافت، خرید و مراقبت</p>
-                    </div>
-                    <button class="btn-glass btn-primary" onclick="openModal('modal-add-chore')">➕ تعریف کار جدید</button>
-                </div>
-                <div class="chores-list" id="chores-manage-list">
-                    <!-- Loaded via JS -->
-                </div>
-            </div>
-        </section>
-
-        <!-- ==================== TAB 5: HABITS & HEALTH (CRUD) ==================== -->
-        <section id="tab-habits" class="tab-section" style="display: none;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <div>
-                    <h2 style="font-size: 1.3rem; font-weight: 700;">🌿 عادت‌های دارویی، شناختی و ایمنی</h2>
-                    <p style="font-size: 0.85rem; color: var(--text-muted);">پایش عادات روزمره سلامت، آرام‌سازی و تمرین‌های اختصاصی هر عضو</p>
-                </div>
-                <button class="btn-glass btn-emerald" onclick="openModal('modal-add-habit')">➕ افزودن عادت جدید</button>
-            </div>
-            <div id="habits-container">
-                <!-- Loaded via JS -->
-            </div>
-        </section>
-
         <!-- ==================== TAB 6: REPORTS & CLINICAL EVALUATIONS ==================== -->
         <section id="tab-reports" class="tab-section" style="display: none;">
             <!-- Longitudinal Psychological Safety & Climate Metrics -->
             <div class="glass-panel" style="margin-bottom: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
                     <div>
                         <h3 style="font-size: 1.2rem; font-weight: 700;">📈 ارزیابی‌های روانشناختی و اثربخشی مداخله‌ها</h3>
                         <p style="font-size: 0.85rem; color: var(--text-muted);">پایش طولی امنیت روانی، احترام، مراقبت ادراک‌شده و تغییرات تطبیقی سیستم</p>
@@ -253,11 +280,22 @@
             </div>
         </section>
 
-        <!-- ==================== TAB 7: SETTINGS & API KEYS ==================== -->
+        <!-- ==================== TAB 7: SETTINGS & BACKUP ==================== -->
         <section id="tab-settings" class="tab-section" style="display: none;">
             <div class="glass-panel" style="max-width: 800px; margin: 0 auto;">
-                <h2 style="font-size: 1.3rem; font-weight: 700; margin-bottom: 6px;">⚙️ تنظیمات سامانه، توکن ربات و کلیدهای هوش مصنوعی</h2>
-                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 24px;">هر کاربر یا عامل هوشمند می‌تواند تنظیمات و توکن‌های اختصاصی خود را در اینجا ثبت و تست کند.</p>
+                <h2 style="font-size: 1.3rem; font-weight: 700; margin-bottom: 6px;">⚙️ تنظیمات سامانه، توکن ربات و پشتیبان‌گیری</h2>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 24px;">پیکربندی هوش مصنوعی، ربات تلگرام و دریافت پشتیبان پایگاه داده</p>
+
+                <!-- Dedicated Backup Box -->
+                <div style="background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.25); border-radius: var(--radius-md); padding: 18px; margin-bottom: 24px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                        <div>
+                            <h3 style="font-size: 1.05rem; font-weight: 700; color: var(--accent-blue);">📦 پشتیبان‌گیری هفتگی پایگاه داده</h3>
+                            <p style="font-size: 0.85rem; color: var(--text-muted);">سیستم هر شنبه به صورت خودکار فایل کامل پایگاه داده را به تلگرام راهبر ارسال می‌کند. همچنین می‌توانید هم‌اکنون فایل پشتیبان را به تلگرام ارسال کنید.</p>
+                        </div>
+                        <button type="button" class="btn-glass btn-emerald" id="btn-send-backup-now">💾 ارسال آنی دیتابیس به تلگرام</button>
+                    </div>
+                </div>
 
                 <form id="form-settings">
                     <!-- Telegram Settings -->
@@ -274,8 +312,8 @@
                         <div class="form-group">
                             <label class="form-label">وضعیت پروکسی:</label>
                             <select class="glass-input" id="setting-use-proxy">
+                                <option value="false">مستقیم (Direct - پیشنهادی)</option>
                                 <option value="true">فعال (Proxy ON)</option>
-                                <option value="false">مستقیم (Direct)</option>
                             </select>
                         </div>
                     </div>
@@ -556,12 +594,18 @@
                 <h3 style="font-size: 1.2rem; font-weight: 700;">📢 ارسال پیام همگانی در تلگرام</h3>
                 <button class="btn-glass" style="padding: 4px 10px;" onclick="closeModal('modal-broadcast')">✕</button>
             </div>
-            <div class="form-group">
-                <label class="form-label">متن پیام (برای تمام اعضایی که تلگرام را متصل کرده‌اند ارسال می‌شود):</label>
-                <textarea class="glass-input" id="broadcast-text" rows="5" placeholder="سلام به همگی، جلسه امشب ساعت ۸ یادتون نره..."></textarea>
+            <div style="margin-bottom: 14px;">
+                <label class="form-label">گیرندگان پیام (اعضای متصل به ربات):</label>
+                <div id="broadcast-recipients-list" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px;">
+                    <!-- Populated via JS -->
+                </div>
             </div>
-            <button class="btn-glass btn-primary" id="btn-send-broadcast" style="width: 100%; padding: 12px;">
-                ارسال فوری در تلگرام
+            <div class="form-group">
+                <label class="form-label">متن پیام ارسالی:</label>
+                <textarea class="glass-input" id="broadcast-text" rows="4" placeholder="سلام به همگی، جلسه خانوادگی امشب ساعت ۸..."></textarea>
+            </div>
+            <button class="btn-glass btn-primary" id="btn-send-broadcast" style="width: 100%; padding: 12px; font-weight: 600;">
+                🚀 ارسال فوری در تلگرام
             </button>
         </div>
     </div>

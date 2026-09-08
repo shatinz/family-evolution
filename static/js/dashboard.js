@@ -1,15 +1,17 @@
 /**
- * Family Evolution Dashboard - Client Side JavaScript v2.6
- * Dynamic Blueprint Rendering, Longitudinal Evaluations, Informed Consent, and Intervention Tracking.
+ * Family Evolution Dashboard - Client Side JavaScript v2.8
+ * Apple-grade Liquid Glass UI with Weekly Chore Matrix, Telegram Backup, and Real-Time Telemetry.
  */
 
 let moodChart = null;
 let evalTrendChart = null;
 let botUsername = "";
+let currentWeekOffset = 0;
 
 document.addEventListener('DOMContentLoaded', () => {
     initTabs();
     loadDashboardData();
+    loadWeeklyCalendar(0);
     loadBlueprint();
     loadEvaluationsAndInterventions();
     loadSettings();
@@ -33,7 +35,7 @@ function initTabs() {
                 targetSection.style.display = 'block';
                 if (targetId === 'tab-blueprint') loadBlueprint();
                 if (targetId === 'tab-members') fetchMembersManage();
-                if (targetId === 'tab-chores') fetchChoresManage();
+                if (targetId === 'tab-chores') { loadWeeklyCalendar(currentWeekOffset); fetchChoresManage(); }
                 if (targetId === 'tab-habits') fetchHabits();
                 if (targetId === 'tab-reports') { fetchStats(); fetchReports(); loadEvaluationsAndInterventions(); }
                 if (targetId === 'tab-settings') loadSettings();
@@ -98,15 +100,102 @@ async function fetchStatus() {
         const text = document.getElementById('bot-status-text');
         if (badge && text) {
             if (data.bot_configured) {
-                badge.className = 'badge badge-green';
-                text.innerText = data.bot_username ? `@${data.bot_username} آنلاین` : 'ربات آنلاین';
+                badge.className = 'bot-badge';
+                text.innerText = data.bot_username ? `@${data.bot_username}` : 'ربات فعال';
             } else {
-                badge.className = 'badge badge-amber';
-                text.innerText = 'ربات بدون توکن';
+                badge.className = 'bot-badge offline';
+                text.innerText = 'ربات غیرفعال';
             }
         }
     } catch (e) {
         console.error('Fetch status error:', e);
+    }
+}
+
+// ==========================================================================
+// Weekly Chore Matrix Calendar
+// ==========================================================================
+async function loadWeeklyCalendar(offset = 0) {
+    currentWeekOffset = offset;
+    try {
+        const res = await fetch(`/api/calendar/weekly?week_offset=${offset}`);
+        const data = await res.json();
+
+        const rangeEl = document.getElementById('weekly-calendar-range');
+        if (rangeEl) {
+            const offsetLabel = offset === 0 ? '(هفته جاری)' : (offset > 0 ? `(${offset} هفته بعد)` : `(${Math.abs(offset)} هفته قبل)`);
+            rangeEl.innerText = `نمای تفکیکی از ${data.start_date} تا ${data.end_date} ${offsetLabel}`;
+        }
+
+        const container = document.getElementById('week-matrix-container');
+        if (!container) return;
+
+        const days = data.days || [];
+        if (days.length === 0) {
+            container.innerHTML = '<div style="color:var(--text-muted); padding:20px;">داده‌ای برای این هفته یافت نشد.</div>';
+            return;
+        }
+
+        container.innerHTML = days.map(d => {
+            const todayClass = d.is_today ? 'today' : '';
+            const todayBadge = d.is_today ? '<span class="badge badge-blue" style="font-size:0.65rem; padding:2px 6px;">امروز</span>' : '';
+
+            const choresHtml = d.chores.length > 0
+                ? d.chores.map(c => {
+                    const isDone = c.status === 'done';
+                    const btnClass = isDone ? 'btn-toggle-status done' : 'btn-toggle-status pending';
+                    const btnText = isDone ? '✅ انجام شد' : '⏳ در انتظار';
+                    const nextStatus = isDone ? 'pending' : 'done';
+
+                    return `
+                        <div class="day-chore-card ${isDone ? 'done' : ''}">
+                            <div class="day-chore-top">
+                                <span class="day-chore-title">${c.icon || '📋'} ${c.title_fa}</span>
+                            </div>
+                            <div class="day-chore-assignee">
+                                <span>${c.avatar || '👤'} ${c.name_fa}</span>
+                                <button class="${btnClass}" onclick="toggleChoreInCalendar(${c.schedule_id}, '${nextStatus}')">
+                                    ${btnText}
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('')
+                : '<div style="color:var(--text-dim); font-size:0.75rem; text-align:center; padding:18px 0;">کاری در این روز نیست</div>';
+
+            return `
+                <div class="week-day-card ${todayClass}">
+                    <div class="week-day-header">
+                        <div>
+                            <span class="week-day-name">${d.day_name_fa}</span>
+                            ${todayBadge}
+                        </div>
+                        <span class="week-day-date">${d.date.slice(5)}</span>
+                    </div>
+                    <div class="week-day-chores">
+                        ${choresHtml}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+    } catch (e) {
+        console.error('Error loading weekly matrix calendar:', e);
+    }
+}
+
+async function toggleChoreInCalendar(scheduleId, nextStatus) {
+    try {
+        await fetch('/api/chores/toggle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ schedule_id: scheduleId, status: nextStatus })
+        });
+        loadWeeklyCalendar(currentWeekOffset);
+        fetchTodayChores();
+        fetchStats();
+    } catch (e) {
+        console.error('Toggle chore error:', e);
     }
 }
 
@@ -124,7 +213,6 @@ async function loadBlueprint() {
             document.getElementById('family-display-overview').innerText = profile.overview || 'هدایت هوشمند وظایف، توانبخشی شناختی سالمند، مهار تنش و ارتقای بهزیستی خانه';
             document.getElementById('bp-family-name').innerText = `🎯 اهداف و نقشه راه: ${profile.family_name || 'خانواده'}`;
 
-            // Communication Rules
             const commList = document.getElementById('comm-rules-list');
             if (commList) {
                 const rules = profile.communication_rules || [];
@@ -133,7 +221,6 @@ async function loadBlueprint() {
                     : '<li style="color:var(--text-dim)">قاعده‌ای هنوز ثبت نشده است.</li>';
             }
 
-            // Emergency Resources
             const emergList = document.getElementById('emergency-res-list');
             if (emergList) {
                 const ems = profile.emergency_resources || [];
@@ -148,7 +235,6 @@ async function loadBlueprint() {
             }
         }
 
-        // Goals Rendering
         const shortGoals = goals.filter(g => g.goal_type === 'short_term');
         const longGoals = goals.filter(g => g.goal_type === 'long_term');
 
@@ -174,7 +260,7 @@ async function loadBlueprint() {
                         ` : ''}
                     </div>
                 `).join('')
-                : '<div style="color:var(--text-dim); font-size:0.85rem;">هدفی ثبت نشده است. عامل هوشمند در حین مصاحبه اهداف را تکمیل خواهد کرد.</div>';
+                : '<div style="color:var(--text-dim); font-size:0.85rem;">هدفی ثبت نشده است.</div>';
         }
 
         if (longCont) {
@@ -226,7 +312,6 @@ async function loadEvaluationsAndInterventions() {
 
         renderEvalTrendChart(trends);
 
-        // Interventions History
         const intRes = await fetch('/api/interventions/history');
         const intHistory = await intRes.json();
         const intCont = document.getElementById('interventions-history-container');
@@ -317,13 +402,10 @@ async function fetchMembersOverview() {
             <div class="glass-panel" style="grid-column: 1 / -1; text-align: center; padding: 36px;">
                 <div style="font-size: 2.5rem; margin-bottom: 12px;">🌱</div>
                 <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 8px;">به سامانه خانواده‌یار خوش آمدید!</h3>
-                <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px; max-width: 650px; margin-left: auto; margin-right: auto; line-height: 1.7;">
-                    هنوز عضوی ثبت نشده است. برای راه‌اندازی، می‌توانید در چت <strong>عامل هوشمند (Agent Manager)</strong> به سوالات مصاحبه تشخیصی مهارت <code>family-evolution</code> پاسخ دهید تا اهداف، اعضا و تقویم وظایف به صورت خودکار در این داشبورد مقداردهی شوند.
+                <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px;">
+                    اعضای خانواده تعریف نشده‌اند. برای شروع روی «افزودن عضو جدید» کلیک کنید.
                 </p>
-                <div style="display: flex; justify-content: center; gap: 12px;">
-                    <button class="btn-glass btn-emerald" onclick="openModal('modal-add-member')">➕ افزودن دستی عضو</button>
-                    <button class="btn-glass" onclick="openModal('modal-add-chore')">➕ افزودن کار خانه</button>
-                </div>
+                <button class="btn-glass btn-emerald" onclick="openModal('modal-add-member')">➕ افزودن عضو</button>
             </div>
         `;
         return;
@@ -404,8 +486,8 @@ async function fetchMembersManage() {
                 <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px; font-size: 0.8rem; display: flex; justify-content: space-between; align-items: center;">
                     <div>
                         ${m.telegram_id 
-                            ? `<span style="color:var(--accent-emerald)">تلگرام: ${m.telegram_id}</span> <button class="btn-glass" style="padding:2px 6px; font-size:0.7rem;" onclick="unbindTelegram(${m.id})">قطع</button>` 
-                            : (botUsername ? `<a href="${directLink}" target="_blank" class="btn-glass btn-primary" style="padding:4px 10px; font-size:0.75rem;">📱 لینک اتصال تلگرام</a>` : '<span>بدون ربات</span>')
+                            ? `<span style="color:var(--accent-emerald)">تلگرام: متصل ✅</span> <button class="btn-glass" style="padding:2px 6px; font-size:0.7rem;" onclick="unbindTelegram(${m.id})">قطع</button>` 
+                            : (botUsername ? `<a href="${directLink}" target="_blank" class="btn-glass btn-primary" style="padding:4px 10px; font-size:0.75rem;">📱 لینک اتصال تلگرام</a>` : '<span>بدون اتصال</span>')
                         }
                     </div>
                     <span>${m.consent_given ? '✅ رضایت ثبت شد' : '⏳ بدون رضایت'}</span>
@@ -535,7 +617,9 @@ async function toggleChore(scheduleId, newStatus) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ schedule_id: scheduleId, status: newStatus })
     });
-    loadDashboardData();
+    fetchTodayChores();
+    loadWeeklyCalendar(currentWeekOffset);
+    fetchStats();
 }
 
 async function deleteChore(choreId) {
@@ -544,6 +628,7 @@ async function deleteChore(choreId) {
     showToast('کار با موفقیت حذف شد.', 'success');
     fetchChoresManage();
     fetchTodayChores();
+    loadWeeklyCalendar(currentWeekOffset);
 }
 
 // --- Habits CRUD ---
@@ -603,7 +688,7 @@ async function deleteHabit(habitId) {
     fetchHabits();
 }
 
-// --- Real Stats & Charts (No Fake Data) ---
+// --- Real Stats & Charts ---
 async function fetchStats() {
     const res = await fetch('/api/stats?days=7');
     const data = await res.json();
@@ -667,7 +752,7 @@ async function fetchReports() {
     if (!container) return;
 
     if (reports.length === 0) {
-        container.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 20px;">هنوز گزارشی ثبت نشده است. با زدن دکمه «اجرای فوری تحلیل هوش مصنوعی» نخستین گزارش را تولید کنید.</div>';
+        container.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 20px;">هنوز گزارشی ثبت نشده است.</div>';
         return;
     }
 
@@ -682,6 +767,30 @@ async function fetchReports() {
             </div>
         </div>
     `).join('');
+}
+
+// --- Broadcast Recipients ---
+async function loadBroadcastRecipients() {
+    try {
+        const res = await fetch('/api/members/recipients');
+        const list = await res.json();
+        const container = document.getElementById('broadcast-recipients-list');
+        if (!container) return;
+
+        if (list.length === 0) {
+            container.innerHTML = '<span style="color:var(--text-dim); font-size:0.8rem;">هیچ عضوی در سامانه ثبت نشده است.</span>';
+            return;
+        }
+
+        container.innerHTML = list.map(m => `
+            <div style="display:inline-flex; align-items:center; gap:6px; background:${m.is_linked ? 'rgba(52,211,153,0.15)' : 'rgba(0,0,0,0.3)'}; border:1px solid ${m.is_linked ? 'rgba(52,211,153,0.4)' : 'rgba(255,255,255,0.08)'}; padding:4px 10px; border-radius:var(--radius-pill); font-size:0.8rem;">
+                <span>${m.avatar} ${m.name_fa}</span>
+                <span>${m.is_linked ? '✅' : '⭕ متصل نیست'}</span>
+            </div>
+        `).join('');
+    } catch (e) {
+        console.error('Error loading recipients:', e);
+    }
 }
 
 // --- Settings & Diagnostics ---
@@ -708,8 +817,48 @@ async function loadSettings() {
     if (setGemini) setGemini.value = cfg.gemini_api_key || '';
 }
 
+// --- Send Telegram Database Backup ---
+async function sendDatabaseBackup() {
+    showToast('در حال تهیه و ارسال فایل پشتیبان پایگاه داده به تلگرام راهبر...', 'info');
+    try {
+        const res = await fetch('/api/admin/send-backup-telegram', { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+            showToast('📦 فایل پشتیبان پایگاه داده با موفقیت به تلگرام راهبر ارسال شد!', 'success');
+        } else {
+            showToast(`خطا در ارسال فایل: ${data.error || data.detail}`, 'error');
+        }
+    } catch (e) {
+        showToast(`خطا در ارتباط با سرور: ${e}`, 'error');
+    }
+}
+
 // --- Event Listeners ---
 function setupEventListeners() {
+    // Week Navigation Buttons
+    const prevWeekBtn = document.getElementById('btn-prev-week');
+    if (prevWeekBtn) {
+        prevWeekBtn.addEventListener('click', () => loadWeeklyCalendar(currentWeekOffset - 1));
+    }
+    const currentWeekBtn = document.getElementById('btn-current-week');
+    if (currentWeekBtn) {
+        currentWeekBtn.addEventListener('click', () => loadWeeklyCalendar(0));
+    }
+    const nextWeekBtn = document.getElementById('btn-next-week');
+    if (nextWeekBtn) {
+        nextWeekBtn.addEventListener('click', () => loadWeeklyCalendar(currentWeekOffset + 1));
+    }
+
+    // Database Backup Buttons
+    const quickBackupBtn = document.getElementById('btn-quick-backup');
+    if (quickBackupBtn) {
+        quickBackupBtn.addEventListener('click', sendDatabaseBackup);
+    }
+    const sendBackupNowBtn = document.getElementById('btn-send-backup-now');
+    if (sendBackupNowBtn) {
+        sendBackupNowBtn.addEventListener('click', sendDatabaseBackup);
+    }
+
     // Add Member Form
     const addMemberForm = document.getElementById('form-add-member');
     if (addMemberForm) {
@@ -785,6 +934,7 @@ function setupEventListeners() {
             closeModal('modal-add-chore');
             showToast('وظیفه جدید با موفقیت در تقویم ثبت شد.', 'success');
             loadDashboardData();
+            loadWeeklyCalendar(currentWeekOffset);
             fetchChoresManage();
         });
     }
@@ -864,6 +1014,7 @@ function setupEventListeners() {
             await fetch('/api/setup/reset-database', { method: 'POST' });
             showToast('پایگاه داده به طور کامل پاکسازی شد.', 'warning');
             loadDashboardData();
+            loadWeeklyCalendar(0);
             loadBlueprint();
             loadEvaluationsAndInterventions();
             fetchMembersManage();
@@ -881,7 +1032,7 @@ function setupEventListeners() {
                 const res = await fetch('/api/telegram/test-connection', { method: 'POST' });
                 const data = await res.json();
                 if (data.ok) {
-                    showToast(`اتصال به تلگرام موفق بود! ربات: @${data.username} (${data.first_name})`, 'success');
+                    showToast(`اتصال به تلگرام برقرار است: @${data.username} (${data.first_name})`, 'success');
                 } else {
                     showToast(`خطا در اتصال تلگرام: ${data.error}`, 'error');
                 }
@@ -904,7 +1055,7 @@ function setupEventListeners() {
                 const res = await fetch('/api/ai/test-connection', { method: 'POST' });
                 const data = await res.json();
                 if (data.ok) {
-                    showToast(`ارتباط با مدل ${data.model} برقرار است. پاسخ: «${data.response}»`, 'success');
+                    showToast(`ارتباط با مدل ${data.model} برقرار است.`, 'success');
                 } else {
                     showToast(`خطا در ارتباط هوش مصنوعی: ${data.error}`, 'error');
                 }
@@ -925,10 +1076,8 @@ function setupEventListeners() {
             const data = await res.json();
             if (data.sent_count > 0) {
                 showToast(`احوالپرسی صبحگاهی به ${data.sent_count} عضو ارسال شد: (${data.sent_to.join(', ')})`, 'success');
-            } else if (data.unlinked_members && data.unlinked_members.length > 0) {
-                showToast(`پیام ارسال نشد: هنوز اعضا (${data.unlinked_members.join('، ')}) به ربات تلگرام متصل نشده‌اند.`, 'warning');
             } else {
-                showToast('هیچ عضوی در سامانه ثبت نشده است.', 'warning');
+                showToast('هنوز عضوی به ربات تلگرام متصل نشده است.', 'warning');
             }
         });
     }
@@ -940,10 +1089,8 @@ function setupEventListeners() {
             const data = await res.json();
             if (data.sent_count > 0) {
                 showToast(`بررسی عصرگاهی به ${data.sent_count} عضو ارسال شد: (${data.sent_to.join(', ')})`, 'success');
-            } else if (data.unlinked_members && data.unlinked_members.length > 0) {
-                showToast(`پیام ارسال نشد: هنوز اعضا (${data.unlinked_members.join('، ')}) به ربات تلگرام متصل نشده‌اند.`, 'warning');
             } else {
-                showToast('عضوی ثبت نشده است.', 'warning');
+                showToast('هنوز عضوی به ربات تلگرام متصل نشده است.', 'warning');
             }
         });
     }
@@ -974,23 +1121,36 @@ function setupEventListeners() {
         });
     }
 
+    // Send Broadcast
     const broadcastBtn = document.getElementById('btn-send-broadcast');
     if (broadcastBtn) {
         broadcastBtn.addEventListener('click', async () => {
             const msg = document.getElementById('broadcast-text').value.trim();
             if (!msg) return;
-            const res = await fetch('/api/telegram/broadcast', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: msg })
-            });
-            const data = await res.json();
-            if (data.sent_count > 0) {
-                showToast(`پیام به ${data.sent_count} عضو ارسال شد.`, 'success');
-            } else {
-                showToast(`پیام ارسال نشد: کاربری در تلگرام متصل نشده است.`, 'warning');
+            broadcastBtn.disabled = true;
+            broadcastBtn.innerText = 'در حال ارسال...';
+            try {
+                const res = await fetch('/api/telegram/broadcast', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: msg })
+                });
+                const data = await res.json();
+                if (data.sent_count > 0) {
+                    showToast(`پیام به ${data.sent_count} عضو (${data.sent_to.join(', ')}) ارسال شد.`, 'success');
+                    document.getElementById('broadcast-text').value = '';
+                    closeModal('modal-broadcast');
+                } else if (data.unlinked_members && data.unlinked_members.length > 0) {
+                    showToast(`پیام ارسال نشد: هنوز عضوی در تلگرام ثبت نشده است (${data.unlinked_members.join(', ')}).`, 'warning');
+                } else {
+                    showToast('هیچ عضوی یافت نشد.', 'warning');
+                }
+            } catch (e) {
+                showToast(`خطا در ارسال: ${e}`, 'error');
+            } finally {
+                broadcastBtn.disabled = false;
+                broadcastBtn.innerText = '🚀 ارسال فوری در تلگرام';
             }
-            closeModal('modal-broadcast');
         });
     }
 
@@ -1017,7 +1177,10 @@ function setupEventListeners() {
 // --- Modal Utilities ---
 function openModal(id) {
     const el = document.getElementById(id);
-    if (el) el.classList.add('active');
+    if (el) {
+        el.classList.add('active');
+        if (id === 'modal-broadcast') loadBroadcastRecipients();
+    }
 }
 
 function closeModal(id) {

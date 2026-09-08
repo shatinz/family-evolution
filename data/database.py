@@ -589,6 +589,39 @@ def get_calendar_events(start_date: str, end_date: str) -> List[Dict[str, Any]]:
     conn.close()
     return rows
 
+def get_weekly_matrix(week_offset: int = 0) -> Dict[str, Any]:
+    """Returns structured 7-day week chore matrix starting from Saturday to Friday"""
+    today = date.today()
+    days_since_sat = (today.weekday() + 2) % 7
+    current_sat = today - timedelta(days=days_since_sat) + timedelta(weeks=week_offset)
+    end_fri = current_sat + timedelta(days=6)
+    
+    # Ensure schedules exist for this range
+    generate_schedule_for_days(14)
+    
+    events = get_calendar_events(current_sat.isoformat(), end_fri.isoformat())
+    
+    persian_day_names = ["شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه"]
+    days_list = []
+    
+    for i in range(7):
+        target_date = current_sat + timedelta(days=i)
+        t_str = target_date.isoformat()
+        day_events = [e for e in events if e["date"] == t_str]
+        days_list.append({
+            "day_name_fa": persian_day_names[i],
+            "date": t_str,
+            "is_today": (t_str == today.isoformat()),
+            "chores": day_events
+        })
+        
+    return {
+        "start_date": current_sat.isoformat(),
+        "end_date": end_fri.isoformat(),
+        "week_offset": week_offset,
+        "days": days_list
+    }
+
 def update_chore_status(schedule_id: int, status: str) -> bool:
     conn = get_db_connection()
     cursor = conn.cursor()

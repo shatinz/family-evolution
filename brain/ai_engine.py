@@ -39,7 +39,7 @@ class AIEngine:
         }
 
         try:
-            with httpx.Client(timeout=self.timeout) as client:
+            with httpx.Client(timeout=httpx.Timeout(15.0, connect=2.0)) as client:
                 resp = client.post(f"{base_url}/chat/completions", headers=headers, json=payload)
                 if resp.status_code == 200:
                     data = resp.json()

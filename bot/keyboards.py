@@ -89,16 +89,23 @@ def get_chore_actions_keyboard(schedule_id: int, current_status: str) -> InlineK
     ]
     return InlineKeyboardMarkup(buttons)
 
-def get_quick_menu_keyboard() -> InlineKeyboardMarkup:
+def get_quick_menu_keyboard(is_leader: bool = False) -> InlineKeyboardMarkup:
     """Main action menu"""
     buttons = [
         [
             InlineKeyboardButton("📋 کارهای امروز من", callback_data="menu:my_chores"),
-            InlineKeyboardButton("🌱 عادت‌ها و سلامت", callback_data="menu:my_habits")
+            InlineKeyboardButton("📅 تقویم کلی خانه", callback_data="menu:family_calendar")
         ],
         [
             InlineKeyboardButton("📊 ارزیابی جامع خانواده", callback_data="menu:start_eval"),
-            InlineKeyboardButton("📅 تقویم کلی خانه", callback_data="menu:family_calendar")
+            InlineKeyboardButton("🌬️ تمرین تنفس و آرامش", callback_data="action:breathing")
+        ],
+        [
+            InlineKeyboardButton("🔄 تغییر پروفایل عضو", callback_data="menu:switch_member")
         ]
     ]
+    if is_leader:
+        buttons.append([
+            InlineKeyboardButton("💾 دریافت پشتیبان پایگاه داده (Backup)", callback_data="menu:backup_db")
+        ])
     return InlineKeyboardMarkup(buttons)

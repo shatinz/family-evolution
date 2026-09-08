@@ -1,10 +1,14 @@
 """
 Telegram Bot Engine for Scalable Family Evolution System
-Real-time dispatching, member deep-linking, informed consent, and confidential clinical evaluations.
+Real-time dispatching, member deep-linking, informed consent, clinical evaluations, and automated database backups.
 """
 import logging
 import asyncio
+import os
+import shutil
 import httpx
+from datetime import datetime
+from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 from telegram import Update
 from telegram.ext import (
@@ -35,7 +39,8 @@ from data.database import (
     get_member_habits,
     toggle_habit_log,
     log_conflict,
-    get_stats_summary
+    get_stats_summary,
+    get_db_connection
 )
 from bot.keyboards import (
     get_consent_keyboard,
@@ -72,6 +77,9 @@ class FamilyBot:
         app.add_handler(CommandHandler("status", self.cmd_status))
         app.add_handler(CommandHandler("evaluation", self.cmd_evaluation))
         app.add_handler(CommandHandler("breathing", self.cmd_breathing))
+        app.add_handler(CommandHandler("switch", self.cmd_switch))
+        app.add_handler(CommandHandler("me", self.cmd_me))
+        app.add_handler(CommandHandler("backup_db", self.cmd_backup_db))
 
         # Callbacks & Text
         app.add_handler(CallbackQueryHandler(self.handle_callback))
@@ -181,7 +189,7 @@ class FamilyBot:
         return {"ok": False, "error": f"عدم برقراری ارتباط با سرورهای تلگرام ({last_error})"}
 
     async def cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Welcome message, deep link handler, and informed consent trigger"""
+        """Welcome message, deep link handler, and recognized member interface"""
         user_id = update.effective_user.id
         args = context.args or []
 
@@ -192,62 +200,88 @@ class FamilyBot:
                 target_member = get_member_by_id(target_member_id)
                 if target_member:
                     link_telegram_id(target_member_id, user_id)
-                    # Check if consent is already given
-                    if not target_member.get("consent_given"):
-                        await update.message.reply_text(
-                            dlg.CONSENT_AND_PRIVACY_CHARTER,
-                            reply_markup=get_consent_keyboard(target_member_id),
-                            parse_mode="Markdown"
-                        )
-                    else:
-                        await update.message.reply_text(
-                            f"سلام {target_member['name_fa']} عزیز ({target_member['avatar']})!\nخوشحالم که دوباره در کنارت هستیم.",
-                            reply_markup=get_quick_menu_keyboard(),
-                            parse_mode="Markdown"
-                        )
+                    record_member_consent(target_member_id, True)
+                    is_leader = bool(target_member.get("is_leader"))
+                    await update.message.reply_text(
+                        f"✅ حساب تلگرام شما با موفقیت به **{target_member['name_fa']}** ({target_member['avatar']}) متصل شد!\nخوش آمدید 🌿",
+                        reply_markup=get_quick_menu_keyboard(is_leader),
+                        parse_mode="Markdown"
+                    )
                     return
             except Exception as e:
                 logger.error(f"Deep link binding error: {e}")
 
-        # 2. Existing Member Check
+        # 2. Check Existing Member Binding
         member = get_member_by_telegram_id(user_id)
         if member:
-            if not member.get("consent_given"):
-                await update.message.reply_text(
-                    dlg.CONSENT_AND_PRIVACY_CHARTER,
-                    reply_markup=get_consent_keyboard(member["id"]),
-                    parse_mode="Markdown"
-                )
-            else:
-                await update.message.reply_text(
-                    f"سلام {member['name_fa']} عزیز ({member['avatar']})!\nچطور می‌توانم کمکتان کنم؟",
-                    reply_markup=get_quick_menu_keyboard(),
-                    parse_mode="Markdown"
-                )
+            is_leader = bool(member.get("is_leader"))
+            welcome_text = (
+                f"🌿 سلام **{member['name_fa']}** عزیز ({member['avatar']})!\n"
+                f"حساب شما متصل است و آماده خدمت‌رسانی هستیم.\n\n"
+                f"یک گزینه را انتخاب کنید:"
+            )
+            await update.message.reply_text(
+                welcome_text,
+                reply_markup=get_quick_menu_keyboard(is_leader),
+                parse_mode="Markdown"
+            )
         else:
             members = get_all_members()
             if not members:
                 await update.message.reply_text(
-                    "🌱 **به سامانه خانواده‌یار خوش آمدید!**\nهنوز عضوی در سیستم تعریف نشده است. لطفاً ابتدا در عامل هوشمند یا پنل وب اعضا را ایجاد فرمایید.",
+                    "🌱 **به سامانه خانواده‌یار خوش آمدید!**\nهنوز عضوی در سیستم تعریف نشده است. لطفاً ابتدا در داشبورد وب یا از طریق عامل هوشمند اعضا را تعریف فرمایید.",
                     parse_mode="Markdown"
                 )
             else:
                 await update.message.reply_text(
-                    "🌱 **لطفاً برای اتصال به پروفایل، نام خود را انتخاب کنید:**",
+                    "🌱 **سلام! به سامانه خانواده‌یار خوش آمدید.**\nلطفاً برای اتصال به پروفایل، نام خود را انتخاب کنید:",
                     reply_markup=get_member_select_keyboard(members),
                     parse_mode="Markdown"
                 )
 
+    async def cmd_switch(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Allow switching between family member profiles"""
+        members = get_all_members()
+        await update.message.reply_text(
+            "🔄 **تغییر پروفایل عضو:**\nلطفاً نام عضوی که می‌خواهید به آن تغییر دهید را انتخاب کنید:",
+            reply_markup=get_member_select_keyboard(members),
+            parse_mode="Markdown"
+        )
+
+    async def cmd_me(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Display current member details"""
+        user_id = update.effective_user.id
+        member = get_member_by_telegram_id(user_id)
+        if not member:
+            await update.message.reply_text("شما هنوز به هیچ عضوی متصل نیستید. با زدن /start نام خود را انتخاب کنید.")
+            return
+
+        chores = get_today_chores_for_member(member["id"])
+        chores_count = len(chores)
+        is_leader = "👑 راهبر سامانه" if member.get("is_leader") else "همراه خانواده"
+        text = (
+            f"👤 **پروفایل شما در خانواده‌یار:**\n\n"
+            f"• نام: **{member['name_fa']}** ({member['name']})\n"
+            f"• نقش: {member['role']} ({is_leader})\n"
+            f"• آواتار: {member['avatar']}\n"
+            f"• وظایف امروز: {chores_count} مورد\n"
+            f"• شناسه تلگرام: `{user_id}`"
+        )
+        await update.message.reply_text(text, reply_markup=get_quick_menu_keyboard(bool(member.get("is_leader"))), parse_mode="Markdown")
+
     async def cmd_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         help_text = (
             "🌿 **راهنمای دستورات سامانه خانواده‌یار:**\n\n"
-            "• `/start` - منوی اصلی و ورود\n"
-            "• `/chores` - مشاهده و ثبت وظایف روزمره خانه\n"
-            "• `/habits` - پایش عادت‌ها و مراقبت‌های سلامتی\n"
-            "• `/evaluation` - شرکت در ارزیابی جامع یا ماهانه خانواده\n"
-            "• `/calendar` - تقویم کارهای امروز همه اعضا\n"
-            "• `/status` - خلاصه آماری هفته\n"
-            "• `/breathing` - تمرین آرامش و تنفس ۴-۷-۸"
+            "• `/start` - منوی اصلی و ورود به سامانه\n"
+            "• `/chores` - مشاهده و تیک زدن وظایف امروز شما\n"
+            "• `/calendar` - تقویم کارهای امروز همه اعضای خانه\n"
+            "• `/habits` - پایش عادت‌ها و روتین‌های سلامتی\n"
+            "• `/evaluation` - شرکت در ارزیابی جامع خانواده\n"
+            "• `/status` - خلاصه آماری هفته و وضعیت خانه\n"
+            "• `/switch` - تغییر پروفایل عضو به نام دیگر\n"
+            "• `/me` - مشخصات پروفایل فعلی شما\n"
+            "• `/backup_db` - دریافت فایل پشتیبان دیتابیس (ویژه راهبر)\n"
+            "• `/breathing` - تمرین تنفس و آرامش ۴-۷-۸"
         )
         await update.message.reply_text(help_text, parse_mode="Markdown")
 
@@ -260,7 +294,10 @@ class FamilyBot:
 
         chores = get_today_chores_for_member(member["id"])
         if not chores:
-            await update.message.reply_text(f"✨ {member['name_fa']} عزیز، برای امروز وظیفه زمان‌بندی شده‌ای نداری! وقت استراحته.")
+            await update.message.reply_text(
+                f"✨ {member['name_fa']} عزیز، برای امروز وظیفه زمان‌بندی شده‌ای نداری! وقت استراحته.",
+                reply_markup=get_quick_menu_keyboard(bool(member.get("is_leader")))
+            )
             return
 
         await update.message.reply_text(f"📋 **کارهای امروز شما ({member['name_fa']}):**", parse_mode="Markdown")
@@ -282,7 +319,7 @@ class FamilyBot:
 
         habits = get_member_habits(member["id"])
         if not habits:
-            await update.message.reply_text("عادت ثبت‌شده‌ای برای شما تعریف نشده است.")
+            await update.message.reply_text("عادت ثبت‌شده‌ای برای شما تعریف نشده است.", reply_markup=get_quick_menu_keyboard(bool(member.get("is_leader"))))
             return
 
         text = f"🌱 **عادت‌ها و مراقبت‌های سلامت ({member['name_fa']}):**\n\n"
@@ -290,7 +327,7 @@ class FamilyBot:
             st = "✅ ثبت شده" if h["today_status"] == "done" else "⭕ ثبت نشده"
             text += f"• {h['title_fa']} ({h['reminder_time'] or 'روزانه'}): {st}\n"
         
-        await update.message.reply_text(text, parse_mode="Markdown")
+        await update.message.reply_text(text, reply_markup=get_quick_menu_keyboard(bool(member.get("is_leader"))), parse_mode="Markdown")
 
     async def cmd_calendar(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         all_chores = get_today_chores_all()
@@ -303,7 +340,7 @@ class FamilyBot:
             st_icon = "✅" if ch["status"] == "done" else "⏳"
             text += f"{st_icon} {ch['avatar']} **{ch['name_fa']}**: {ch['icon']} {ch['title_fa']}\n"
 
-        await update.message.reply_text(text, parse_mode="Markdown")
+        await update.message.reply_text(text, reply_markup=get_quick_menu_keyboard(), parse_mode="Markdown")
 
     async def cmd_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         stats = get_stats_summary(days=7)
@@ -341,6 +378,16 @@ class FamilyBot:
             parse_mode="Markdown"
         )
 
+    async def cmd_backup_db(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Send SQLite DB file directly to admin telegram"""
+        user_id = update.effective_user.id
+        member = get_member_by_telegram_id(user_id)
+        if not member or not member.get("is_leader"):
+            await update.message.reply_text("🔒 دریافت فایل پشتیبان دیتابیس تنها برای راهبر سامانه مجاز است.")
+            return
+
+        await self.send_database_backup_to_admin(target_chat_id=user_id)
+
     # --- Interactive Clinical Evaluation State Machine ---
 
     async def start_evaluation_flow(self, user_id: int, member_id: int, eval_type: str, reply_fn):
@@ -377,22 +424,39 @@ class FamilyBot:
         if data.startswith("bind_member:"):
             member_id = int(data.split(":")[1])
             link_telegram_id(member_id, user_id)
+            record_member_consent(member_id, True)
             member = get_member_by_id(member_id)
-            if not member.get("consent_given"):
-                await query.edit_message_text(
-                    dlg.CONSENT_AND_PRIVACY_CHARTER,
-                    reply_markup=get_consent_keyboard(member_id),
-                    parse_mode="Markdown"
-                )
-            else:
-                await query.edit_message_text(
-                    f"✅ حساب شما با موفقیت به **{member['name_fa']}** ({member['avatar']}) متصل شد!",
-                    reply_markup=get_quick_menu_keyboard(),
-                    parse_mode="Markdown"
-                )
+            is_leader = bool(member.get("is_leader")) if member else False
+            name = member["name_fa"] if member else "همراه عزیز"
+
+            await query.edit_message_text(
+                f"✅ حساب شما با موفقیت به **{name}** ({member['avatar'] if member else '👤'}) متصل شد!\nاز منوی زیر می‌توانید کارهای امروز را مشاهده و مدیریت کنید.",
+                reply_markup=get_quick_menu_keyboard(is_leader),
+                parse_mode="Markdown"
+            )
             return
 
-        # 2. Consent Action
+        # 2. Switch Member Menu
+        if data == "menu:switch_member":
+            members = get_all_members()
+            await query.edit_message_text(
+                "🔄 **انتخاب عضو جدید برای این حساب:**",
+                reply_markup=get_member_select_keyboard(members),
+                parse_mode="Markdown"
+            )
+            return
+
+        # 3. Backup DB Button
+        if data == "menu:backup_db":
+            member = get_member_by_telegram_id(user_id)
+            if member and member.get("is_leader"):
+                await query.edit_message_text("⏳ در حال تهیه و ارسال فایل پشتیبان پایگاه داده...")
+                await self.send_database_backup_to_admin(target_chat_id=user_id)
+            else:
+                await query.edit_message_text("🔒 فقط راهبر سامانه به فایل پشتیبان دسترسی دارد.")
+            return
+
+        # 4. Consent Action
         if data.startswith("consent:"):
             parts = data.split(":")
             action = parts[1]
@@ -402,6 +466,7 @@ class FamilyBot:
 
             if action == "agree":
                 record_member_consent(member_id, True)
+                link_telegram_id(member_id, user_id)
                 await query.edit_message_text(
                     dlg.CONSENT_ACCEPTED.format(name=name),
                     parse_mode="Markdown"
@@ -412,7 +477,7 @@ class FamilyBot:
                 await query.edit_message_text(dlg.CONSENT_DECLINED.format(name=name), parse_mode="Markdown")
             return
 
-        # 3. Likert Scale Evaluations
+        # 5. Likert Scale Evaluations
         if data.startswith("eval:"):
             parts = data.split(":")
             metric = parts[1]
@@ -443,7 +508,6 @@ class FamilyBot:
                     parse_mode="Markdown"
                 )
             elif metric == "climate":
-                # Finalize Evaluation
                 member_id = state.get("member_id", 1)
                 eval_type = state.get("eval_type", "monthly")
                 td = state.get("temp_data", {})
@@ -459,20 +523,23 @@ class FamilyBot:
                 )
                 self.user_states.pop(user_id, None)
 
+                member = get_member_by_id(member_id)
+                is_leader = bool(member.get("is_leader")) if member else False
                 final_text = dlg.BASELINE_COMPLETED if eval_type == "baseline" else dlg.MONTHLY_COMPLETED
-                await query.edit_message_text(final_text, reply_markup=get_quick_menu_keyboard(), parse_mode="Markdown")
+                await query.edit_message_text(final_text, reply_markup=get_quick_menu_keyboard(is_leader), parse_mode="Markdown")
             return
 
-        # 4. Mood Checkin
+        # 6. Mood Checkin
         if data.startswith("mood:"):
             parts = data.split(":")
             member = get_member_by_telegram_id(user_id)
             member_id = member["id"] if member else 1
+            is_leader = bool(member.get("is_leader")) if member else False
 
             if parts[1] == "anger":
                 log_checkin(member_id=member_id, mood=1, anger=1, notes="اعلام تنش عاطفی")
                 await query.edit_message_text(
-                    "مامان جان، احساس شما کاملاً شنیده شد ❤️\nبیایید چند ثانیه با هم تنفس آرامش‌بخش انجام دهیم:\n\n" + dlg.ANGER_SUPPORT_MOTHER,
+                    "احساس شما کاملاً شنیده شد ❤️\nبیایید چند ثانیه با هم تنفس آرامش‌بخش انجام دهیم:\n\n" + dlg.ANGER_SUPPORT_MOTHER,
                     parse_mode="Markdown"
                 )
             else:
@@ -481,24 +548,26 @@ class FamilyBot:
                 emoji_feedback = "عالیه! انرژیت پایدار 🌟" if mood_score >= 4 else "ممنون که گفتی. در کنارت هستیم 🌿"
                 await query.edit_message_text(
                     f"حس و حال شما ({mood_score} از ۵) ثبت شد. {emoji_feedback}",
-                    reply_markup=get_quick_menu_keyboard()
+                    reply_markup=get_quick_menu_keyboard(is_leader)
                 )
             return
 
-        # 5. Chores & Menu
+        # 7. Chores & Menu
         if data.startswith("chore_toggle:"):
             schedule_id = int(data.split(":")[1])
             update_chore_status(schedule_id, "done")
+            member = get_member_by_telegram_id(user_id)
+            is_leader = bool(member.get("is_leader")) if member else False
             await query.edit_message_text(
-                "✅ کار با موفقیت به عنوان «انجام شده» ثبت شد. خسته نباشی!",
-                reply_markup=get_quick_menu_keyboard()
+                "✅ کار با موفقیت به عنوان «انجام شده» ثبت شد. خسته نباشی! 🌟",
+                reply_markup=get_quick_menu_keyboard(is_leader)
             )
             return
 
         if data.startswith("chore_swap:"):
             schedule_id = int(data.split(":")[1])
             all_members = get_all_members()
-            next_assignee = next((m for m in all_members if m["role"] in ["sister", "brother", "user"]), all_members[0]) if all_members else None
+            next_assignee = next((m for m in all_members if m["id"] != (get_member_by_telegram_id(user_id) or {}).get("id")), all_members[0]) if all_members else None
             if next_assignee:
                 swap_chore_assignee(schedule_id, next_assignee["id"])
                 await query.edit_message_text(
@@ -517,23 +586,38 @@ class FamilyBot:
             member = get_member_by_telegram_id(user_id)
             if member:
                 chores = get_today_chores_for_member(member["id"])
+                is_leader = bool(member.get("is_leader"))
                 if chores:
                     txt = f"📋 کارهای امروز شما ({len(chores)} مورد):\n"
                     for c in chores:
-                        st = "✅" if c['status'] == 'done' else "⏳"
-                        txt += f"{st} {c['icon']} {c['title_fa']}\n"
-                    await query.edit_message_text(txt, reply_markup=get_quick_menu_keyboard())
+                        st = "✅ انجام شد" if c['status'] == 'done' else "⏳ در انتظار"
+                        txt += f"• {c['icon']} {c['title_fa']} ({st})\n"
+                    await query.edit_message_text(txt, reply_markup=get_quick_menu_keyboard(is_leader))
                 else:
-                    await query.edit_message_text("امروز کار معوقه‌ای نداری! 🌿", reply_markup=get_quick_menu_keyboard())
+                    await query.edit_message_text("✨ امروز وظیفه معوقه‌ای نداری! وقت استراحته.", reply_markup=get_quick_menu_keyboard(is_leader))
             return
 
         if data == "menu:family_calendar":
             all_chores = get_today_chores_all()
+            member = get_member_by_telegram_id(user_id)
+            is_leader = bool(member.get("is_leader")) if member else False
             if all_chores:
-                txt = "📅 کارهای امروز خانه:\n" + "\n".join([f"{c['avatar']} {c['name_fa']}: {c['icon']} {c['title_fa']} ({'✅' if c['status']=='done' else '⏳'})" for c in all_chores])
+                txt = "📅 **کارهای امروز خانه:**\n" + "\n".join([f"• {c['avatar']} **{c['name_fa']}**: {c['icon']} {c['title_fa']} ({'✅' if c['status']=='done' else '⏳'})" for c in all_chores])
             else:
                 txt = "امروز وظیفه‌ای در تقویم ثبت نشده است."
-            await query.edit_message_text(txt, reply_markup=get_quick_menu_keyboard())
+            await query.edit_message_text(txt, reply_markup=get_quick_menu_keyboard(is_leader), parse_mode="Markdown")
+            return
+
+        if data == "action:breathing":
+            await query.edit_message_text(
+                "🌿 **تمرین تنفس آرامش‌بخش ۴-۷-۸:**\n\n"
+                "۱. ۴ ثانیه آرام از بینی دم بکشید 🌬️\n"
+                "۲. ۷ ثانیه نفس را حبس کنید 🧘\n"
+                "۳. ۸ ثانیه آرام از دهان بازدم کنید 🍃\n\n"
+                "۳ تا ۴ بار تکرار کنید.",
+                reply_markup=get_quick_menu_keyboard(),
+                parse_mode="Markdown"
+            )
             return
 
     async def handle_text_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -564,7 +648,6 @@ class FamilyBot:
                         avatar=member.get("avatar", "👤")
                     )
 
-                # Move to interpersonal perception if other members exist
                 other_members = state.get("other_members", [])
                 if other_members:
                     state["step"] = "interpersonal"
@@ -576,7 +659,6 @@ class FamilyBot:
                         parse_mode="Markdown"
                     )
                 else:
-                    # Directly to Likert safety
                     state["step"] = "safety"
                     await update.message.reply_text(
                         dlg.SYSTEMIC_SAFETY_PROMPT,
@@ -603,7 +685,6 @@ class FamilyBot:
                         )
                     elif substep == "appreciate":
                         hurt_val = state.get("current_pair_data", {}).get("hurt", "")
-                        # Save confidential dynamic
                         log_interpersonal_dynamics(
                             source_member_id=member_id,
                             target_member_id=target["id"],
@@ -612,7 +693,6 @@ class FamilyBot:
                         )
                         state["current_pair_data"] = {}
                         
-                        # Move to next target member or proceed to Likert scale
                         if target_idx + 1 < len(other_members):
                             state["current_target_idx"] = target_idx + 1
                             state["interpersonal_substep"] = "hurt"
@@ -630,13 +710,76 @@ class FamilyBot:
                             )
                 return
 
-        # Normal text message (daily thoughts/notes)
+        # Normal text message
         name = member["name_fa"] if member else "همراه عزیز"
+        is_leader = bool(member.get("is_leader")) if member else False
         log_checkin(member_id=member_id, mood=4, win=text, notes=text, checkin_type="daily_text")
         reply = f"✨ سپاسگزارم {name} عزیز، پیام شما در سیستم ثبت شد:\n«{text}»\nانرژی مثبت شما در خانه جاریست 🌿"
-        await update.message.reply_text(reply, reply_markup=get_quick_menu_keyboard())
+        await update.message.reply_text(reply, reply_markup=get_quick_menu_keyboard(is_leader))
 
-    # --- Real Dispatch Functions with Detailed Status ---
+    # --- Real Dispatch Functions & Automated Database Backup ---
+
+    async def send_database_backup_to_admin(self, target_chat_id: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Exports and sends the SQLite family.db file directly as a document to the admin's Telegram chat.
+        """
+        if not self.app:
+            return {"ok": False, "error": "ربات در حال اجرا نیست."}
+
+        # Find admin telegram id if not explicitly passed
+        admin_id = target_chat_id
+        if not admin_id:
+            members = get_all_members()
+            # 1. Member marked with is_leader
+            leader = next((m for m in members if m.get("is_leader") and m.get("telegram_id")), None)
+            # 2. Member with role user/leader/admin
+            if not leader:
+                leader = next((m for m in members if m.get("role") in ["user", "leader", "admin"] and m.get("telegram_id")), None)
+            # 3. Any active linked member
+            if not leader:
+                leader = next((m for m in members if m.get("telegram_id")), None)
+            if leader:
+                admin_id = leader["telegram_id"]
+
+        if not admin_id:
+            return {"ok": False, "error": "شناسه تلگرام راهبر (Admin) در سامانه یافت نشد. لطفاً ابتدا در ربات با زدن /start پروفایل راهبر را انتخاب کنید."}
+
+        db_file = Path(config.db_path)
+        if not db_file.exists():
+            return {"ok": False, "error": f"فایل پایگاه داده در مسیر {config.db_path} یافت نشد."}
+
+        try:
+            # Force SQLite WAL Checkpoint to flush data to main db file
+            try:
+                conn = get_db_connection()
+                conn.execute("PRAGMA wal_checkpoint(FULL)")
+                conn.close()
+            except Exception:
+                pass
+
+            stats = get_stats_summary(days=7)
+            now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+            caption = (
+                f"📦 **پشتیبان هفتگی پایگاه داده خانواده‌یار**\n\n"
+                f"📅 تاریخ: `{now_str}`\n"
+                f"📊 آمار هفته: {stats.get('done_chores', 0)} کار انجام‌شده • {stats.get('conflict_count', 0)} تعارض\n"
+                f"🔒 تمامی اطلاعات اعضا، وظایف و ارزیابی‌های روانشناختی محفوظ است."
+            )
+
+            with open(db_file, "rb") as f:
+                await self.app.bot.send_document(
+                    chat_id=admin_id,
+                    document=f,
+                    filename=f"family_backup_{datetime.now().strftime('%Y%m%d_%H%M')}.db",
+                    caption=caption,
+                    parse_mode="Markdown"
+                )
+
+            logger.info(f"Database backup sent to admin Telegram ({admin_id}).")
+            return {"ok": True, "sent_to_admin_id": admin_id}
+        except Exception as e:
+            logger.error(f"Failed to send database backup to admin: {e}")
+            return {"ok": False, "error": str(e)}
 
     async def dispatch_morning_checkins(self) -> Dict[str, Any]:
         """Broadcast morning check-in to all consented members"""
@@ -768,6 +911,8 @@ class FamilyBot:
         failed = []
         unlinked = []
 
+        formatted_message = f"📢 **پیام همگانی خانواده:**\n\n{message_text}\n\n🌿 _خانواده‌یار_"
+
         for m in members:
             tid = m["telegram_id"]
             if not tid:
@@ -775,8 +920,9 @@ class FamilyBot:
                 continue
 
             try:
-                await self.app.bot.send_message(chat_id=tid, text=message_text, parse_mode="Markdown")
+                await self.app.bot.send_message(chat_id=tid, text=formatted_message, parse_mode="Markdown")
                 sent_to.append(m["name_fa"])
+                log_checkin(member_id=m["id"], mood=4, checkin_type="broadcast_received", notes=f"دریافت پیام همگانی: {message_text[:50]}")
             except Exception as e:
                 logger.error(f"Failed to broadcast to {m['name_fa']} ({tid}): {e}")
                 failed.append({"name": m["name_fa"], "error": str(e)})
