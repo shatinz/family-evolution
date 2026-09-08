@@ -1,5 +1,6 @@
 """
 Core Configuration Module for Scalable Family Evolution System
+Supports custom instance configurations via CONFIG_FILE environment variable.
 """
 import os
 import json
@@ -8,7 +9,12 @@ from dataclasses import dataclass, asdict, field
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
-CONFIG_FILE = DATA_DIR / "config.json"
+
+def get_config_file_path() -> Path:
+    env_path = os.getenv("CONFIG_FILE")
+    if env_path:
+        return Path(env_path).resolve()
+    return DATA_DIR / "config.json"
 
 @dataclass
 class AppConfig:
@@ -43,17 +49,19 @@ class AppConfig:
         return BASE_DIR
 
     def save(self):
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        cfg_path = get_config_file_path()
+        cfg_path.parent.mkdir(parents=True, exist_ok=True)
         data_to_save = {k: v for k, v in asdict(self).items() if not k.startswith("_")}
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        with open(cfg_path, "w", encoding="utf-8") as f:
             json.dump(data_to_save, f, indent=2, ensure_ascii=False)
 
     @classmethod
     def load(cls) -> "AppConfig":
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-        if CONFIG_FILE.exists():
+        cfg_path = get_config_file_path()
+        cfg_path.parent.mkdir(parents=True, exist_ok=True)
+        if cfg_path.exists():
             try:
-                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                with open(cfg_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     return cls(**data)
             except Exception:

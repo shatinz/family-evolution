@@ -494,7 +494,18 @@ def get_all_chores() -> List[Dict[str, Any]]:
     conn.close()
     return rows
 
-def generate_schedule_for_days(conn: sqlite3.Connection, days_ahead: int = 7):
+def generate_schedule_for_days(conn_or_days: Any = 7, days_ahead: int = 7):
+    should_close = False
+    if isinstance(conn_or_days, (int, float)):
+        days_ahead = int(conn_or_days)
+        conn = get_db_connection()
+        should_close = True
+    elif conn_or_days is None:
+        conn = get_db_connection()
+        should_close = True
+    else:
+        conn = conn_or_days
+
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM chores WHERE default_assignee_id IS NOT NULL")
     chores = cursor.fetchall()
@@ -523,6 +534,8 @@ def generate_schedule_for_days(conn: sqlite3.Connection, days_ahead: int = 7):
                     (chore_id, assignee_id, curr_date)
                 )
     conn.commit()
+    if should_close:
+        conn.close()
 
 def get_today_chores_for_member(member_id: int) -> List[Dict[str, Any]]:
     conn = get_db_connection()
