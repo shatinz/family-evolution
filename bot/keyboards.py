@@ -97,10 +97,11 @@ def get_quick_menu_keyboard(is_leader: bool = False) -> InlineKeyboardMarkup:
             InlineKeyboardButton("📅 تقویم کلی خانه", callback_data="menu:family_calendar")
         ],
         [
-            InlineKeyboardButton("📊 ارزیابی جامع خانواده", callback_data="menu:start_eval"),
+            InlineKeyboardButton("📮 صندوق ناشناس (انتقاد/پیشنهاد)", callback_data="menu:anonymous_box"),
             InlineKeyboardButton("🌬️ تمرین تنفس و آرامش", callback_data="action:breathing")
         ],
         [
+            InlineKeyboardButton("📊 ارزیابی جامع خانواده", callback_data="menu:start_eval"),
             InlineKeyboardButton("🔄 تغییر پروفایل عضو", callback_data="menu:switch_member")
         ]
     ]

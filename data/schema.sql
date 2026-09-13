@@ -175,3 +175,14 @@ CREATE TABLE IF NOT EXISTS system_logs (
     message TEXT NOT NULL,
     data_json TEXT
 );
+
+-- Anonymous Suggestion & Grievance Box (Zero Identity Linkage for 100% Confidentiality)
+CREATE TABLE IF NOT EXISTS anonymous_feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    feedback_text TEXT NOT NULL,
+    category TEXT DEFAULT 'general',
+    processed_by_ai INTEGER DEFAULT 0,
+    ai_themes_json TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);

@@ -31,7 +31,8 @@ from data.database import (
     rotate_chores_now,
     log_family_evaluation,
     get_systemic_health_trend,
-    get_intervention_history
+    get_intervention_history,
+    get_anonymous_feedbacks
 )
 from brain.reporter import generate_weekly_analysis
 from bot.telegram_bot import telegram_bot
@@ -140,6 +141,25 @@ TOOLS = [
             "type": "object",
             "properties": {}
         }
+    },
+    {
+        "name": "get_anonymous_feedback_summary",
+        "description": "Retrieve family members' anonymous suggestions and grievances (with zero identity linkage) for clinical/management synthesis.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "unprocessed_only": {
+                    "type": "boolean",
+                    "description": "If true, returns only feedback that has not yet been processed by the AI report engine",
+                    "default": False
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of feedbacks to retrieve (default: 20)",
+                    "default": 20
+                }
+            }
+        }
     }
 ]
 
@@ -210,6 +230,13 @@ async def handle_tool_call(name: str, arguments: Dict[str, Any]) -> Dict[str, An
         elif name == "backup_database_to_telegram":
             res = await telegram_bot.send_database_backup_to_admin()
             return {"content": [{"type": "text", "text": json.dumps(res, ensure_ascii=False, indent=2)}]}
+
+        elif name == "get_anonymous_feedback_summary":
+            unprocessed_only = arguments.get("unprocessed_only", False)
+            limit = arguments.get("limit", 20)
+            feedbacks = get_anonymous_feedbacks(unprocessed_only=unprocessed_only, limit=limit)
+            return {"content": [{"type": "text", "text": json.dumps(feedbacks, ensure_ascii=False, indent=2)}]}
+
 
         else:
             return {"isError": True, "content": [{"type": "text", "text": f"Unknown tool: {name}"}]}

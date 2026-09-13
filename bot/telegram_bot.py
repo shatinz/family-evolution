@@ -40,7 +40,8 @@ from data.database import (
     toggle_habit_log,
     log_conflict,
     get_stats_summary,
-    get_db_connection
+    get_db_connection,
+    add_anonymous_feedback
 )
 from bot.keyboards import (
     get_consent_keyboard,
@@ -80,6 +81,8 @@ class FamilyBot:
         app.add_handler(CommandHandler("switch", self.cmd_switch))
         app.add_handler(CommandHandler("me", self.cmd_me))
         app.add_handler(CommandHandler("backup_db", self.cmd_backup_db))
+        app.add_handler(CommandHandler("feedback", self.cmd_anonymous_box))
+        app.add_handler(CommandHandler("anonymous", self.cmd_anonymous_box))
 
         # Callbacks & Text
         app.add_handler(CallbackQueryHandler(self.handle_callback))
@@ -388,6 +391,12 @@ class FamilyBot:
 
         await self.send_database_backup_to_admin(target_chat_id=user_id)
 
+    async def cmd_anonymous_box(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Allow member to submit 100% anonymous suggestion or grievance"""
+        user_id = update.effective_user.id
+        self.user_states[user_id] = {"step": "waiting_anonymous_feedback"}
+        await update.message.reply_text(dlg.ANONYMOUS_BOX_PROMPT, parse_mode="Markdown")
+
     # --- Interactive Clinical Evaluation State Machine ---
 
     async def start_evaluation_flow(self, user_id: int, member_id: int, eval_type: str, reply_fn):
@@ -608,6 +617,14 @@ class FamilyBot:
             await query.edit_message_text(txt, reply_markup=get_quick_menu_keyboard(is_leader), parse_mode="Markdown")
             return
 
+        if data == "menu:anonymous_box":
+            self.user_states[user_id] = {"step": "waiting_anonymous_feedback"}
+            await query.edit_message_text(
+                dlg.ANONYMOUS_BOX_PROMPT,
+                parse_mode="Markdown"
+            )
+            return
+
         if data == "action:breathing":
             await query.edit_message_text(
                 "🌿 **تمرین تنفس آرامش‌بخش ۴-۷-۸:**\n\n"
@@ -628,6 +645,18 @@ class FamilyBot:
         member_id = member["id"] if member else 1
 
         state = self.user_states.get(user_id)
+
+        # Anonymous box submission
+        if state and state.get("step") == "waiting_anonymous_feedback":
+            add_anonymous_feedback(feedback_text=text, category="general")
+            self.user_states.pop(user_id, None)
+            is_leader = bool(member.get("is_leader")) if member else False
+            await update.message.reply_text(
+                dlg.ANONYMOUS_BOX_CONFIRMED,
+                reply_markup=get_quick_menu_keyboard(is_leader),
+                parse_mode="Markdown"
+            )
+            return
 
         # In-interview text processing
         if state:

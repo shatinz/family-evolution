@@ -932,3 +932,54 @@ def get_latest_reports(limit: int = 5) -> List[Dict[str, Any]]:
     rows = [dict(r) for r in cursor.fetchall()]
     conn.close()
     return rows
+
+# --- Anonymous Suggestion & Grievance Box (Zero Identity Tracking) ---
+
+def add_anonymous_feedback(feedback_text: str, category: str = "general") -> int:
+    """
+    Saves an anonymous feedback/criticism/suggestion into the database.
+    STRICT PRIVACY: Absolutely NO member_id, telegram_id, or IP is recorded.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    today_str = date.today().isoformat()
+    cursor.execute(
+        """INSERT INTO anonymous_feedback (date, feedback_text, category, processed_by_ai)
+           VALUES (?, ?, ?, 0)""",
+        (today_str, feedback_text.strip(), category)
+    )
+    fid = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return fid
+
+def get_anonymous_feedbacks(limit: int = 20, unread_only: bool = False, unprocessed_only: bool = False) -> List[Dict[str, Any]]:
+    """Retrieve anonymous feedbacks for AI clinical assessment or dashboard view."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    only_unprocessed = unread_only or unprocessed_only
+    if only_unprocessed:
+        cursor.execute("SELECT * FROM anonymous_feedback WHERE processed_by_ai = 0 ORDER BY id DESC LIMIT ?", (limit,))
+    else:
+        cursor.execute("SELECT * FROM anonymous_feedback ORDER BY id DESC LIMIT ?", (limit,))
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+def mark_feedbacks_processed(feedback_ids: List[int], ai_themes: Optional[dict] = None, themes: Optional[Any] = None) -> bool:
+    """Mark feedbacks as synthesized and processed by AI engine."""
+    if not feedback_ids:
+        return False
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    chosen_themes = ai_themes if ai_themes is not None else themes
+    themes_json = json.dumps(chosen_themes or {}, ensure_ascii=False)
+    placeholders = ",".join(["?"] * len(feedback_ids))
+    cursor.execute(
+        f"UPDATE anonymous_feedback SET processed_by_ai = 1, ai_themes_json = ? WHERE id IN ({placeholders})",
+        [themes_json] + feedback_ids
+    )
+    affected = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return affected

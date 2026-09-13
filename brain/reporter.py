@@ -10,7 +10,9 @@ from data.database import (
     save_ai_report,
     get_db_connection,
     get_systemic_health_trend,
-    record_intervention_adaptation
+    record_intervention_adaptation,
+    get_anonymous_feedbacks,
+    mark_feedbacks_processed
 )
 
 def generate_weekly_analysis(days: int = 7) -> Tuple[str, str, Dict[str, Any]]:
@@ -19,9 +21,11 @@ def generate_weekly_analysis(days: int = 7) -> Tuple[str, str, Dict[str, Any]]:
     - Detailed Leader Clinical & Operational Report
     - Family Encouragement Broadcast
     - Closed-loop Intervention Adaptation Recommendations
+    - Anonymous Feedback & Suggestion Box synthesis
     """
     stats = get_stats_summary(days=days)
     systemic_trends = get_systemic_health_trend()
+    anonymous_feedbacks = get_anonymous_feedbacks(limit=10)
     
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -51,18 +55,22 @@ def generate_weekly_analysis(days: int = 7) -> Tuple[str, str, Dict[str, Any]]:
         "systemic_psychological_trends": systemic_trends,
         "recent_checkins": recent_checkins,
         "recent_conflicts": recent_conflicts,
-        "recent_interventions": recent_interventions
+        "recent_interventions": recent_interventions,
+        "anonymous_suggestions_and_grievances": [
+            {"date": f["date"], "text": f["feedback_text"], "category": f.get("category", "general")}
+            for f in anonymous_feedbacks
+        ]
     }
     
     prompt = f"""
 شما مشاور و تحلیل‌گر ارشد سیستم‌های رفتاری و سلامت روان خانواده هستید.
-بر اساس داده‌های واقعی زیر از شاخص‌های روزانه و ارزیابی‌های روانشناختی (امنیت روانی، احترام، مراقبت ادراک‌شده و کارهای منزل)، گزارش تحلیلی هفتگی و تنظیم مداخله‌ها را تدوین کنید:
+بر اساس داده‌های واقعی زیر از شاخص‌های روزانه، ارزیابی‌های روانشناختی و پیام‌های صندوق انتقادات ناشناس، گزارش تحلیلی هفتگی و تنظیم مداخله‌ها را تدوین کنید:
 
 داده‌های ورودی:
 {json.dumps(context_payload, ensure_ascii=False, indent=2)}
 
 دستورالعمل تولید خروجی:
-۱. گزارش اول (راهبر): تحلیل دقیق شاخص‌های امنیت روانی، احترام، خستگی، نرخ انجام وظایف، میزان اثربخشی مداخله‌های فعلی و توصیه‌های تعدیل مداخله برای هفته آینده.
+۱. گزارش اول (راهبر): تحلیل دقیق شاخص‌های امنیت روانی، احترام، خستگی، نرخ انجام وظایف، سنتز پیام‌های صندوق ناشناس بدون افشای هویت، و توصیه‌های تعدیل مداخله برای هفته آینده.
 ۲. گزارش دوم (پیام همگانی خانواده): متن دلگرم‌کننده، کوتاه و مثبت برای پخش در تلگرام.
 ۳. بخش تغییرات مداخله (Intervention Tuning): در صورت افت هر شاخص، تغییرات پیشنهادی در عادات، تقسیم کار یا قواعد ارتباطی را مشخص کنید.
 

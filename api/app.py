@@ -52,7 +52,9 @@ from data.database import (
     get_latest_reports,
     generate_schedule_for_days,
     get_weekly_matrix,
-    rotate_chores_now
+    rotate_chores_now,
+    add_anonymous_feedback,
+    get_anonymous_feedbacks
 )
 from brain.ai_engine import ai_engine
 from brain.reporter import generate_weekly_analysis
@@ -156,6 +158,10 @@ class TemplateInitReq(BaseModel):
 
 class BroadcastReq(BaseModel):
     message: str
+
+class AnonymousFeedbackReq(BaseModel):
+    feedback_text: str
+    category: Optional[str] = "general"
 
 class ConfigSaveReq(BaseModel):
     telegram_bot_token: Optional[str] = None
@@ -579,3 +585,16 @@ async def api_trigger_evening():
 async def api_trigger_monthly():
     res = await telegram_bot.dispatch_monthly_evaluations()
     return res
+
+# --- Anonymous Suggestion & Grievance Box ---
+@app.post("/api/feedback/anonymous")
+async def api_submit_anonymous_feedback(req: AnonymousFeedbackReq):
+    if not req.feedback_text or not req.feedback_text.strip():
+        raise HTTPException(status_code=400, detail="Feedback text cannot be empty.")
+    feedback_id = add_anonymous_feedback(req.feedback_text.strip(), req.category or "general")
+    return {"status": "ok", "feedback_id": feedback_id, "message": "Feedback recorded anonymously."}
+
+@app.get("/api/feedback/anonymous")
+async def api_get_anonymous_feedback(unprocessed_only: bool = False, limit: int = 50):
+    return get_anonymous_feedbacks(unprocessed_only=unprocessed_only, limit=limit)
+

@@ -317,5 +317,41 @@ class TestScalableFamilyEvolution(unittest.TestCase):
         self.assertIn("days", parsed_matrix)
         self.assertEqual(len(parsed_matrix["days"]), 7)
 
+    def test_09_anonymous_feedback_system(self):
+        from data.database import add_anonymous_feedback, get_anonymous_feedbacks, mark_feedbacks_processed
+        
+        # Test DB operations
+        f_id = add_anonymous_feedback(
+            feedback_text="لطفاً زمان تمیزکاری را کمی دیرتر بگذارید",
+            category="chores"
+        )
+        self.assertGreater(f_id, 0)
+        
+        feedbacks = get_anonymous_feedbacks(unprocessed_only=True)
+        self.assertGreater(len(feedbacks), 0)
+        latest = [f for f in feedbacks if f["id"] == f_id][0]
+        self.assertEqual(latest["feedback_text"], "لطفاً زمان تمیزکاری را کمی دیرتر بگذارید")
+        self.assertEqual(latest["category"], "chores")
+        self.assertEqual(latest["processed_by_ai"], 0)
+        
+        # Test API endpoint
+        api_res = self.client.post("/api/feedback/anonymous", json={
+            "feedback_text": "پیشنهاد برای خرید شوینده جدید",
+            "category": "suggestion"
+        })
+        self.assertEqual(api_res.status_code, 200)
+        self.assertEqual(api_res.json()["status"], "ok")
+        
+        get_res = self.client.get("/api/feedback/anonymous")
+        self.assertEqual(get_res.status_code, 200)
+        self.assertGreater(len(get_res.json()), 0)
+        
+        # Mark processed
+        mark_feedbacks_processed([f_id], ai_themes={"topics": ["chores_timing"]})
+        all_unprocessed = get_anonymous_feedbacks(unprocessed_only=True)
+        unprocessed_ids = [f["id"] for f in all_unprocessed]
+        self.assertNotIn(f_id, unprocessed_ids)
+
 if __name__ == "__main__":
     unittest.main()
+
