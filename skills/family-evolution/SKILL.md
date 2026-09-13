@@ -74,7 +74,7 @@ When setting up or updating household chores, the AI MUST distribute duties base
 │ 🧠 Leader / Sibling 1 │ Young Adult / High   │ • Active Rotational Pool     │
 │ 👩 Sister / Sibling 2 │ Capacity             │ • Washing dishes (🍽️ Daily)   │
 │ 👨 Brother / Sibling 3│                      │ • Cleaning living room (🛋️) │
-│                       │                      │ • Sweeping floors (🧹 2-day) │
+│                       │                      │ • Sweeping floors (🧹 Weekly)│
 │                       │                      │ • Mopping floors (🧼 2/wk)   │
 │                       │                      │ • Trash disposal (🗑️ Daily)  │
 └───────────────────────┴──────────────────────┴──────────────────────────────┘

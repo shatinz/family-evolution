@@ -576,11 +576,22 @@ def generate_schedule_for_days(conn_or_days: Any = 7, days_ahead: int = 7):
             pool = json.loads(pool_raw) if pool_raw else []
             
             # Frequency filtering
+            should_run = True
             if freq == "every_2_days" and i % 2 != 0:
-                continue
-            if freq == "twice_weekly" and target_date_obj.weekday() not in [1, 4]: # Tuesdays & Fridays
-                continue
-            if freq == "weekly" and target_date_obj.weekday() != 4: # Fridays
+                should_run = False
+            elif freq == "twice_weekly" and target_date_obj.weekday() not in [1, 4]: # Tuesdays & Fridays
+                should_run = False
+            elif freq in ["weekly", "weekly_thursday"] and target_date_obj.weekday() != 3: # Thursdays (پنجشنبه‌ها)
+                should_run = False
+            elif freq == "weekly_friday" and target_date_obj.weekday() != 4: # Fridays (جمعه‌ها)
+                should_run = False
+
+            if not should_run:
+                # Clean up any pending schedule on non-active days when frequency changes
+                cursor.execute(
+                    "DELETE FROM chore_schedule WHERE chore_id = ? AND date = ? AND status = 'pending'",
+                    (chore_id, curr_date)
+                )
                 continue
 
             # Determine assignee for this specific date
