@@ -60,6 +60,9 @@ class FamilyBot:
         self.app: Optional[Application] = None
         self.bot_info: Optional[Dict[str, Any]] = None
         self.user_states: Dict[int, Dict[str, Any]] = {}
+        self._is_running: bool = False
+        self._watchdog_task: Optional[asyncio.Task] = None
+        self._active_proxy: Optional[str] = None
 
     def _create_app(self, token: str, proxy: Optional[str] = None) -> Application:
         request_kwargs = {"connect_timeout": 15.0, "read_timeout": 20.0}
@@ -89,35 +92,42 @@ class FamilyBot:
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text_message))
         return app
 
-    def build_application(self) -> Optional[Application]:
-        """Build and configure the Telegram application instance"""
+    def _get_candidate_proxies(self) -> List[Optional[str]]:
+        """Build prioritized list of proxy candidates and direct connection"""
+        proxies: List[Optional[str]] = []
+        if self._active_proxy and self._active_proxy not in proxies:
+            proxies.append(self._active_proxy)
+        if config.telegram_proxy and config.telegram_proxy not in proxies:
+            proxies.append(config.telegram_proxy)
+        for standard_proxy in ["socks5h://127.0.0.1:10808", "http://127.0.0.1:10808", "http://127.0.0.1:10809"]:
+            if standard_proxy not in proxies:
+                proxies.append(standard_proxy)
+        if None not in proxies:
+            proxies.append(None)
+        return proxies
+
+    async def _connect_bot(self) -> bool:
+        """Attempts connection across candidate proxies and starts polling if successful"""
         token = config.telegram_bot_token
         if not token:
             logger.warning("No Telegram Bot Token configured.")
-            return None
+            return False
 
-        proxy = config.telegram_proxy if config.use_proxy else None
-        try:
-            self.app = self._create_app(token, proxy=proxy)
-            return self.app
-        except Exception as e:
-            logger.error(f"Error building telegram application: {e}")
-            return None
-
-    async def start_bot(self):
-        """Initialize and start Telegram Bot polling with resilient fallback"""
-        token = config.telegram_bot_token
-        if not token:
-            logger.warning("No Telegram Bot Token configured.")
-            return
-
-        proxies_to_try = []
-        if config.use_proxy and config.telegram_proxy:
-            proxies_to_try.append(config.telegram_proxy)
-        proxies_to_try.append(None)  # Direct fallback
-
-        for p in proxies_to_try:
+        candidates = self._get_candidate_proxies()
+        for p in candidates:
             try:
+                # Cleanup existing instance before trying new connection
+                if self.app:
+                    try:
+                        if self.app.updater and self.app.updater.running:
+                            await self.app.updater.stop()
+                        if self.app.running:
+                            await self.app.stop()
+                        await self.app.shutdown()
+                    except Exception:
+                        pass
+                    self.app = None
+
                 self.app = self._create_app(token, proxy=p)
                 await self.app.initialize()
                 await self.app.start()
@@ -128,10 +138,20 @@ class FamilyBot:
                     "username": me.username,
                     "first_name": me.first_name
                 }
-                logger.info(f"Telegram Bot @{me.username} ({me.first_name}) started polling successfully (Connection: {p or 'Direct'}).")
-                return
+                self._active_proxy = p
+                logger.info(f"Telegram Bot @{me.username} ({me.first_name}) connected and started polling (Route: {p or 'Direct'}).")
+                
+                # Persist successful proxy in config
+                if p and not config.use_proxy:
+                    config.use_proxy = True
+                    config.telegram_proxy = p
+                    try:
+                        config.save()
+                    except Exception:
+                        pass
+                return True
             except Exception as e:
-                logger.warning(f"Connection attempt failed with {'proxy ' + str(p) if p else 'Direct'}: {e}")
+                logger.debug(f"Connection attempt failed with {'proxy ' + str(p) if p else 'Direct'}: {e}")
                 if self.app:
                     try:
                         if self.app.updater and self.app.updater.running:
@@ -141,12 +161,49 @@ class FamilyBot:
                         await self.app.shutdown()
                     except Exception:
                         pass
-                self.app = None
+                    self.app = None
 
-        logger.error("Failed to connect Telegram Bot across all connection attempts.")
+        logger.warning("All Telegram Bot connection candidates failed in this attempt.")
+        return False
+
+    async def _watchdog_loop(self):
+        """Continuous background watchdog that recovers Telegram Bot polling after reboots or network resets"""
+        logger.info("Telegram Bot watchdog loop started.")
+        while self._is_running:
+            try:
+                is_active = (
+                    self.app is not None
+                    and self.app.updater is not None
+                    and self.app.updater.running
+                    and self.bot_info is not None
+                )
+                if not is_active and config.telegram_bot_token:
+                    logger.info("Telegram Bot watchdog: Bot is inactive or disconnected. Attempting reconnection...")
+                    await self._connect_bot()
+            except Exception as e:
+                logger.warning(f"Watchdog exception: {e}")
+            await asyncio.sleep(12)
+
+    async def start_bot(self):
+        """Initialize Telegram Bot and launch continuous watchdog"""
+        self._is_running = True
+        # Immediate attempt
+        await self._connect_bot()
+        # Launch continuous watchdog
+        if self._watchdog_task is None or self._watchdog_task.done():
+            self._watchdog_task = asyncio.create_task(self._watchdog_loop())
 
     async def stop_bot(self):
-        """Cleanly shutdown Telegram Bot updater and application"""
+        """Cleanly shutdown Telegram Bot updater, application and watchdog"""
+        self._is_running = False
+        if self._watchdog_task and not self._watchdog_task.done():
+            self._watchdog_task.cancel()
+            try:
+                await self._watchdog_task
+            except asyncio.CancelledError:
+                pass
+            self._watchdog_task = None
+
         if self.app:
             try:
                 if self.app.updater and self.app.updater.running:
@@ -157,6 +214,8 @@ class FamilyBot:
                 logger.info("Telegram Bot stopped.")
             except Exception as e:
                 logger.error(f"Error stopping telegram bot: {e}")
+            self.app = None
+            self.bot_info = None
 
     def test_connection(self) -> Dict[str, Any]:
         """Directly tests Telegram API connectivity and returns verified bot info"""
@@ -164,13 +223,9 @@ class FamilyBot:
         if not token:
             return {"ok": False, "error": "توکن ربات تلگرام تنظیم نشده است."}
 
-        proxies_to_try = []
-        if config.use_proxy and config.telegram_proxy:
-            proxies_to_try.append(config.telegram_proxy)
-        proxies_to_try.append(None)
-
+        candidates = self._get_candidate_proxies()
         last_error = None
-        for p in proxies_to_try:
+        for p in candidates:
             try:
                 with httpx.Client(proxy=p, timeout=6.0) if p else httpx.Client(timeout=6.0) as client:
                     res = client.get(f"https://api.telegram.org/bot{token}/getMe")
@@ -190,6 +245,7 @@ class FamilyBot:
                 last_error = str(e)
 
         return {"ok": False, "error": f"عدم برقراری ارتباط با سرورهای تلگرام ({last_error})"}
+
 
     async def cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Welcome message, deep link handler, and recognized member interface"""
